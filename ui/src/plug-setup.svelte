@@ -251,9 +251,9 @@
         },
         host.signal,
       );
-      // The module restarts to take the new settings, so the first reads may
-      // fail; the page's own refresh picks it up in a moment.
-      await store.refresh();
+      // The module restarts to take the new settings. Close at once and let
+      // the store wait for it quietly, with the page saying so meanwhile.
+      void store.settle(rows.map((row, index) => effectiveName(row, index)));
       onclose();
     } catch (error) {
       if (!host.signal.aborted)

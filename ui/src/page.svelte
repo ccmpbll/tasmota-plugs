@@ -37,7 +37,13 @@
     <PlugSetup {addFor} onclose={() => (editing = false)} />
   {/if}
 
-  {#if store.failure}
+  {#if store.applying}
+    <p class="text-sm text-muted-foreground">
+      {t('smart-plugs.page.applying')}
+    </p>
+  {/if}
+
+  {#if store.failure && !store.applying}
     <Alert variant="destructive">
       <AlertDescription>
         {t('smart-plugs.page.failed', { reason: store.failure })}
@@ -45,7 +51,7 @@
     </Alert>
   {/if}
 
-  {#if store.loaded && store.plugs.length === 0 && !store.failure && !editing}
+  {#if store.loaded && store.plugs.length === 0 && !store.failure && !store.applying && !editing}
     <EmptyState
       size="sm"
       heading={t('smart-plugs.page.empty.heading')}

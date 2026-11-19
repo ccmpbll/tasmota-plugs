@@ -1,6 +1,6 @@
 # The manifest for smart-plugs, a module that is the Go process in main.go and
 # nothing else. There is no ui block, so it draws nothing in the app. It drives
-# up to eight Tasmota plugs over HTTP, one or more per printer, adds a Plugs
+# up to eight Tasmota plugs over HTTP, one or more per printer, adds a Tasmota Plugs
 # page to the app, and logs the print events of the printers the host lets it
 # observe.
 #
@@ -26,7 +26,7 @@ license: MIT
 # your team's beside it.
 # title: Your module's name
 title: Tasmota plugs
-summary: Switches Tasmota smart plugs, one or more per printer, from a Plugs page, and follows print events.
+summary: Switches Tasmota smart plugs, one or more per printer, from a Tasmota Plugs page, and follows print events.
 codeowner: ccmpbll
 # The module wire major the process half speaks.
 contract_major: 1
@@ -208,7 +208,7 @@ egress:
 permissions:
   - observe
 
-# The browser half: a Plugs page in the app's sidebar, a line and a section for
+# The browser half: a Tasmota Plugs page in the app's sidebar, a line and a section for
 # each printer that has a plug, built by `sh scripts/ui-build.sh`
 # into ui/dist. The page lists the plugs and switches each one through this
 # module's own routes.
@@ -220,15 +220,15 @@ ui:
   contributes:
     pages:
       - path: smart-plugs
-        title: Plugs
+        title: Tasmota Plugs
     # A line on each printer's card in the list, and a tab on its own page, for
     # the printers that have a plug linked to them by serial.
     device_card:
       - id: smart-plugs
-        title: Tasmota
+        title: Tasmota Plugs
     device_tab:
       - id: smart-plugs
-        title: Tasmota
+        title: Tasmota Plugs
     # A card a person places on a dashboard: a row per plug with a button to
     # switch it. The one setting narrows it to the plugs of chosen printers.
     cards:
