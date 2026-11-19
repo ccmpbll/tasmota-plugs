@@ -222,8 +222,18 @@ on what it does:
 - A plug switched off this way says why on its card, until it is switched on
   again by anyone. Each switch off is also a line in the log.
 - If an idle printer's plug cannot be reached, the module waits five minutes
-  before it tries again, so a wrong address does not fill the log. An overheat
-  cut is tried again at every look.
+  before it tries again, so a wrong address does not fill the log. Only the plugs
+  that failed are tried again; the ones already off are left alone. An overheat
+  cut is tried again, for the plugs that failed, at every look.
+- The plugs of a printer are switched off at the same time, and every printer's
+  overheat is dealt with before any idle switch off, so a plug that does not
+  answer (eight seconds) does not hold back a safety cut.
+- An offline printer is not judged on its last readings, which Connect keeps
+  after the printer goes dark. After a printer comes back from a cut it is
+  switched off again only if it reads over the limit on two looks in a row.
+- An overheat limit that cannot see its heater (the printer reports no such
+  temperature, or the server does not know the printer) is said once in the log,
+  so a limit that never fires does not look like one that works.
 
 The slots are fixed, not a list, because the manifest declares every host this
 module connects to under `egress`, and one egress entry names one option and so

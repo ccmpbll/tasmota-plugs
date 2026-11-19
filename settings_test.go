@@ -3,6 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -221,6 +224,47 @@ func TestAutomaticPowerOffLimitsAreHeldToTheirRanges(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%s=%s was refused: %v", key, value, err)
 			}
+		}
+	}
+}
+
+// The ranges are written in Go, in the manifest's summaries and in the page's
+// own checks. This holds the last two to the first, so a changed range cannot
+// leave the page accepting what the module refuses at start.
+func TestTheAutomaticLimitRangesAreTheSameInGoTheManifestAndThePage(t *testing.T) {
+	page, err := os.ReadFile("ui/src/plug-setup.svelte")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	manifest, err := os.ReadFile("module.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	onPage := regexp.MustCompile(`key: '(\w+)',\s+label:[^\n]*\n\s+hint:[^\n]*\n\s+low: (\d+),\s+high: (\d+),`)
+	inManifest := regexp.MustCompile(`- key: (\w+)\n\s+type: string\n\s+default: "[^"]*"\n\s+summary: "([^"]*)"`)
+
+	found := map[string][2]int{}
+
+	for _, m := range onPage.FindAllStringSubmatch(string(page), -1) {
+		low, _ := strconv.Atoi(m[2])
+		high, _ := strconv.Atoi(m[3])
+		found[m[1]] = [2]int{low, high}
+	}
+
+	summaries := map[string]string{}
+	for _, m := range inManifest.FindAllStringSubmatch(string(manifest), -1) {
+		summaries[m[1]] = m[2]
+	}
+
+	for _, limit := range autoLimits {
+		if got := found[limit.key]; got != [2]int{limit.low, limit.high} {
+			t.Errorf("the page checks %s against %v, the module against %d to %d", limit.key, got, limit.low, limit.high)
+		}
+
+		if want := fmt.Sprintf("%d to %d", limit.low, limit.high); !strings.Contains(summaries[limit.key], want) {
+			t.Errorf("the manifest says %q for %s, want it to say %q", summaries[limit.key], limit.key, want)
 		}
 	}
 }

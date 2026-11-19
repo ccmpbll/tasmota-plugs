@@ -222,6 +222,8 @@ func routes() http.Handler {
 		ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
 		defer cancel()
 
+		mark := auto.mark()
+
 		reading, err := p.Read(ctx)
 		if err != nil {
 			refuse(w, r, unreachable(config, "the plug did not answer", err))
@@ -229,7 +231,7 @@ func routes() http.Handler {
 			return
 		}
 
-		answer(w, http.StatusOK, viewOf(config, reading))
+		answer(w, http.StatusOK, viewOf(config, reading, mark))
 	})
 
 	mux.HandleFunc("POST /plugs/{name}/power", func(w http.ResponseWriter, r *http.Request) {
@@ -280,9 +282,7 @@ func routes() http.Handler {
 
 		// A person has switched it now, so what the module did to it before is no
 		// longer why it is as it is.
-		if auto != nil {
-			auto.forget(config.Name)
-		}
+		auto.forget(config.Name)
 
 		answer(w, http.StatusOK, plugView{Name: config.Name, Host: config.Host, Printer: config.Printer, On: body.On})
 	})
@@ -316,8 +316,9 @@ type plugView struct {
 	AutoOff *autoEvent `json:"auto_off,omitempty"`
 }
 
-// viewOf is a plug and what it just said.
-func viewOf(config plugConfig, r Reading) plugView {
+// viewOf is a plug and what it just said. mark is the watcher's mark from before
+// the plug was asked.
+func viewOf(config plugConfig, r Reading, mark uint64) plugView {
 	view := plugView{
 		Name: config.Name, Host: config.Host, Printer: config.Printer, On: &r.On,
 		Energy: r.Energy, SignalDBm: r.SignalDBm, UptimeSeconds: r.UptimeSeconds,
@@ -325,12 +326,10 @@ func viewOf(config plugConfig, r Reading) plugView {
 
 	// Why it was switched off is shown only while it stays off. A plug seen on
 	// has been switched back on, by a person or at the plug, and its reason ends.
-	if auto != nil {
-		if r.On {
-			auto.forget(config.Name)
-		} else {
-			view.AutoOff = auto.last(config.Name)
-		}
+	if r.On {
+		auto.forgetSeen(config.Name, mark)
+	} else {
+		view.AutoOff = auto.last(config.Name)
 	}
 
 	return view
@@ -354,12 +353,14 @@ func readAll(ctx context.Context, plugs []plugConfig) []plugView {
 			ctx, cancel := context.WithTimeout(ctx, 6*time.Second)
 			defer cancel()
 
+			mark := auto.mark()
+
 			p, err := plugAt(config.Host)
 			if err == nil {
 				var reading Reading
 
 				if reading, err = p.Read(ctx); err == nil {
-					views[i] = viewOf(config, reading)
+					views[i] = viewOf(config, reading, mark)
 				}
 			}
 

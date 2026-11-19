@@ -113,6 +113,10 @@ type autoEvent struct {
 	Reason string    `json:"reason"`
 	Detail string    `json:"detail"`
 	At     time.Time `json:"at"`
+
+	// seq orders the events, so a read that began before a cut can be told from
+	// one that began after it.
+	seq uint64
 }
 
 // streak is how long a printer has been idle, and whether it was cut for it.
@@ -120,8 +124,11 @@ type streak struct {
 	since time.Time
 	// retryAt is when a cut that failed may be tried again.
 	retryAt time.Time
-	done    bool
-	warned  bool
+	// left is the plugs a failed cut did not reach, so the next try is for them
+	// alone. Nil until a cut has been tried.
+	left   []plugConfig
+	done   bool
+	warned bool
 }
 
 // trip is a cut made for overheating, kept until the printer shows that it took
@@ -129,6 +136,12 @@ type streak struct {
 type trip struct {
 	at         time.Time
 	sawOffline bool
+	// back is set on the first look at the printer after it came back from offline
+	// still over its limit: a reading that old may be the last one before the cut,
+	// so it is cut again only if the next look agrees.
+	back bool
+	// left is the plugs the cut did not reach, tried again at every look.
+	left []plugConfig
 }
 
 // watcher switches plugs off on its own: after a printer has been idle and has
@@ -146,9 +159,12 @@ type watcher struct {
 	streaks map[string]*streak
 	trips   map[string]*trip
 	failing bool
+	// blind is the printers whose missing readings were said already.
+	blind map[string]bool
 
 	mu     sync.Mutex
 	events map[string]autoEvent
+	seq    uint64
 }
 
 // auto is the running watcher. It is nil until run starts it, and in tests.
@@ -174,6 +190,7 @@ func newWatcher(snapshots func(context.Context) (map[string]snapshot, error)) *w
 		},
 		streaks: map[string]*streak{},
 		trips:   map[string]*trip{},
+		blind:   map[string]bool{},
 		events:  map[string]autoEvent{},
 	}
 }
@@ -194,16 +211,54 @@ func (w *watcher) Run(ctx context.Context) {
 	}
 }
 
-// forget ends the reason a plug was switched off.
+// forget ends the reason a plug was switched off. Safe on a watcher that is not
+// running, which is how the routes are tested.
 func (w *watcher) forget(plug string) {
+	if w == nil {
+		return
+	}
+
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
 	delete(w.events, plug)
 }
 
+// mark is taken before a plug is read. A reading that finds the plug on ends the
+// reason with forgetSeen and the mark, and only for a cut made before the read
+// began: a read that was already in flight when the cut came answers from before
+// it, and must not erase it.
+func (w *watcher) mark() uint64 {
+	if w == nil {
+		return 0
+	}
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	return w.seq
+}
+
+// forgetSeen ends the reason for a cut that a read, begun at mark, could have seen.
+func (w *watcher) forgetSeen(plug string, mark uint64) {
+	if w == nil {
+		return
+	}
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if event, ok := w.events[plug]; ok && event.seq <= mark {
+		delete(w.events, plug)
+	}
+}
+
 // last is why the plug was last switched off by the module, if it was.
 func (w *watcher) last(plug string) *autoEvent {
+	if w == nil {
+		return nil
+	}
+
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -221,6 +276,7 @@ func (w *watcher) tick(ctx context.Context) {
 	if cfg == nil || (cfg.Auto.IdleMinutes == 0 && cfg.Auto.OverheatNozzleC == 0 && cfg.Auto.OverheatBedC == 0) {
 		clear(w.streaks)
 		clear(w.trips)
+		clear(w.blind)
 
 		return
 	}
@@ -259,21 +315,71 @@ func (w *watcher) tick(ctx context.Context) {
 
 	slices.Sort(serials)
 
+	// A heater over its limit comes first, for every printer, so no slow plug of
+	// an idle printer holds a safety cut back.
+	var calm []string
+
 	for _, serial := range serials {
 		// A printer the host does not know reads as no state and no temperature,
 		// which neither rule acts on.
-		snap := snaps[serial]
+		snap, known := snaps[serial]
+
+		w.sight(cfg.Auto, serial, snap, known)
 
 		if !w.overheat(ctx, cfg.Auto, serial, snap, linked[serial]) {
-			w.idle(ctx, cfg.Auto, serial, snap, linked[serial])
+			calm = append(calm, serial)
 		}
 	}
+
+	for _, serial := range calm {
+		w.idle(ctx, cfg.Auto, serial, snaps[serial], linked[serial])
+	}
+}
+
+// sight says, once, when a printer cannot be watched for a limit that is set: a
+// limit that never fires must not look like one that is working. An offline
+// printer is skipped, since it has nothing to read.
+func (w *watcher) sight(a Auto, serial string, snap snapshot, known bool) {
+	if (a.OverheatNozzleC == 0 && a.OverheatBedC == 0) || snap.State == stateOffline {
+		return
+	}
+
+	var problem string
+
+	switch {
+	case !known:
+		problem = "is not known to Prusa Connect"
+	case a.OverheatNozzleC > 0 && snap.Nozzle == nil:
+		problem = "reports no hotend temperature"
+	case a.OverheatBedC > 0 && snap.Bed == nil:
+		problem = "reports no bed temperature"
+	default:
+		delete(w.blind, serial)
+
+		return
+	}
+
+	if !w.blind[serial] {
+		w.log("printer %s %s, so the overheat limit cannot protect it", serial, problem)
+	}
+
+	w.blind[serial] = true
 }
 
 // overheat cuts a printer whose heater reads over its limit, whatever it is
 // doing. It reports whether the printer is being dealt with, so the idle rule
 // stays out of it.
 func (w *watcher) overheat(ctx context.Context, a Auto, serial string, snap snapshot, plugs []plugConfig) bool {
+	// An offline printer's readings are the last ones it sent, not what its heaters
+	// do now. The cut took, if one was made; there is nothing to cut otherwise.
+	if snap.State == stateOffline {
+		if t := w.trips[serial]; t != nil {
+			t.sawOffline = true
+		}
+
+		return false
+	}
+
 	detail, over := overheated(a, snap)
 	if !over {
 		delete(w.trips, serial)
@@ -285,20 +391,28 @@ func (w *watcher) overheat(ctx context.Context, a Auto, serial string, snap snap
 
 	if t := w.trips[serial]; t != nil {
 		switch {
-		case snap.State == stateOffline:
-			t.sawOffline = true
+		case t.sawOffline && !t.back:
+			// It is back and reads over its limit. Its first reading may be the old
+			// one, so this look only notes it.
+			t.back = true
 
 			return true
 		case t.sawOffline:
-			// It went offline, so the cut took, and it is back and still over.
+			// Over on two looks in a row since it came back: the cut took, and this is
+			// a new overheat.
 			delete(w.trips, serial)
+		case len(t.left) > 0:
+			t.left = w.cutAll(ctx, t.left, reasonOverheat, detail)
+			t.at = now
+
+			return true
 		case now.Sub(t.at) < tripRetry:
 			return true
 		}
 	}
 
-	if w.cutAll(ctx, plugs, reasonOverheat, detail) {
-		w.trips[serial] = &trip{at: now, sawOffline: snap.State == stateOffline}
+	if failed := w.cutAll(ctx, plugs, reasonOverheat, detail); len(failed) < len(plugs) {
+		w.trips[serial] = &trip{at: now, left: failed}
 	}
 
 	return true
@@ -355,37 +469,62 @@ func (w *watcher) idle(ctx context.Context, a Auto, serial string, snap snapshot
 		return
 	}
 
-	if w.cutAll(ctx, plugs, reasonIdle, fmt.Sprintf("the printer was idle for %d min and had cooled", a.IdleMinutes)) {
+	todo := plugs
+	if s.left != nil {
+		todo = s.left
+	}
+
+	s.left = w.cutAll(ctx, todo, reasonIdle, fmt.Sprintf("the printer was idle for %d min and had cooled", a.IdleMinutes))
+	if len(s.left) == 0 {
 		s.done = true
 	} else {
 		s.retryAt = now.Add(idleRetry)
 	}
 }
 
-// cutAll switches every plug off and remembers why. It reports whether any
-// plug went off, so a failure is tried again on the next look.
-func (w *watcher) cutAll(ctx context.Context, plugs []plugConfig, reason, detail string) bool {
-	var acted bool
+// cutAll switches the plugs off at the same time, so one that does not answer
+// costs its own timeout and no other plug's, and remembers why. It returns the
+// plugs that could not be switched off, for the caller to try again.
+func (w *watcher) cutAll(ctx context.Context, plugs []plugConfig, reason, detail string) []plugConfig {
+	failed := make([]bool, len(plugs))
 
-	for _, p := range plugs {
-		within, cancel := context.WithTimeout(ctx, cutTimeout)
-		err := w.cut(within, p)
+	var wg sync.WaitGroup
 
-		cancel()
+	for i, p := range plugs {
+		wg.Add(1)
 
-		if err != nil {
-			w.log("could not switch off %q (%s): %v", p.Name, reason, err)
+		go func() {
+			defer wg.Done()
 
-			continue
-		}
+			within, cancel := context.WithTimeout(ctx, cutTimeout)
+			defer cancel()
 
-		acted = true
+			if err := w.cut(within, p); err != nil {
+				w.log("could not switch off %q (%s): %v", p.Name, reason, err)
 
-		w.log("switched off %q (%s): %s", p.Name, reason, detail)
-		w.mu.Lock()
-		w.events[p.Name] = autoEvent{Reason: reason, Detail: detail, At: w.now()}
-		w.mu.Unlock()
+				failed[i] = true
+
+				return
+			}
+
+			w.log("switched off %q (%s): %s", p.Name, reason, detail)
+
+			w.mu.Lock()
+			w.seq++
+			w.events[p.Name] = autoEvent{Reason: reason, Detail: detail, At: w.now(), seq: w.seq}
+			w.mu.Unlock()
+		}()
 	}
 
-	return acted
+	wg.Wait()
+
+	var left []plugConfig
+
+	for i, p := range plugs {
+		if failed[i] {
+			left = append(left, p)
+		}
+	}
+
+	return left
 }

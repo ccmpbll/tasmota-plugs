@@ -98,25 +98,46 @@ func (a Auto) cooldown() int {
 	return a.CooldownC
 }
 
+// autoLimit is one of the four settings: its key, the range it must be in when
+// set, and the field it fills. The one place that lists them, so the key list, the
+// reader and the range check cannot drift; a test holds the page and the manifest
+// to these ranges.
+type autoLimit struct {
+	key       string
+	low, high int
+	field     func(*Auto) *int
+}
+
+//nolint:gochecknoglobals // a fixed table, read-only.
+var autoLimits = []autoLimit{
+	{"auto_off_minutes", 1, maxIdleMinutes, func(a *Auto) *int { return &a.IdleMinutes }},
+	{"auto_off_cooldown_c", minCooldownC, maxCooldownC, func(a *Auto) *int { return &a.CooldownC }},
+	{"overheat_nozzle_c", minOverheatNozzle, maxOverheatNozzle, func(a *Auto) *int { return &a.OverheatNozzleC }},
+	{"overheat_bed_c", minOverheatBed, maxOverheatBed, func(a *Auto) *int { return &a.OverheatBedC }},
+}
+
+// autoLimitFor is the setting a key names.
+func autoLimitFor(key string) (autoLimit, bool) {
+	for _, limit := range autoLimits {
+		if limit.key == key {
+			return limit, true
+		}
+	}
+
+	return autoLimit{}, false
+}
+
 // validate holds each limit to its range. Zero is off, and for the cooldown the
 // default.
 func (a Auto) validate() error {
-	for _, limit := range []struct {
-		key       string
-		value     int
-		low, high int
-	}{
-		{"auto_off_minutes", a.IdleMinutes, 1, maxIdleMinutes},
-		{"auto_off_cooldown_c", a.CooldownC, minCooldownC, maxCooldownC},
-		{"overheat_nozzle_c", a.OverheatNozzleC, minOverheatNozzle, maxOverheatNozzle},
-		{"overheat_bed_c", a.OverheatBedC, minOverheatBed, maxOverheatBed},
-	} {
-		if limit.value == 0 {
+	for _, limit := range autoLimits {
+		value := *limit.field(&a)
+		if value == 0 {
 			continue
 		}
 
-		if limit.value < limit.low || limit.value > limit.high {
-			return fmt.Errorf("%s %d is not allowed: a whole number from %d to %d, or empty for off", limit.key, limit.value, limit.low, limit.high)
+		if value < limit.low || value > limit.high {
+			return fmt.Errorf("%s %d is not allowed: a whole number from %d to %d, or empty for off", limit.key, value, limit.low, limit.high)
 		}
 	}
 
@@ -187,10 +208,15 @@ func (s *Settings) UnmarshalJSON(data []byte) error {
 			}
 
 			continue
-		case "auto_off_minutes", "auto_off_cooldown_c", "overheat_nozzle_c", "overheat_bed_c":
-			if err := s.Auto.set(key, value); err != nil {
+		}
+
+		if limit, ok := autoLimitFor(key); ok {
+			n, err := parseWhole(key, value)
+			if err != nil {
 				return err
 			}
+
+			*limit.field(&s.Auto) = n
 
 			continue
 		}
@@ -234,27 +260,6 @@ func (s *Settings) UnmarshalJSON(data []byte) error {
 		}
 
 		s.Plugs = append(s.Plugs, *held)
-	}
-
-	return nil
-}
-
-// set reads one of the automatic power-off keys.
-func (a *Auto) set(key, value string) error {
-	n, err := parseWhole(key, value)
-	if err != nil {
-		return err
-	}
-
-	switch key {
-	case "auto_off_minutes":
-		a.IdleMinutes = n
-	case "auto_off_cooldown_c":
-		a.CooldownC = n
-	case "overheat_nozzle_c":
-		a.OverheatNozzleC = n
-	case "overheat_bed_c":
-		a.OverheatBedC = n
 	}
 
 	return nil

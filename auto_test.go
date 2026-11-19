@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -16,6 +17,7 @@ func deg(n float64) *float64 { return &n }
 
 // rig is a watcher with a clock, printers and plugs that a test moves by hand.
 type rig struct {
+	mu     sync.Mutex // the cuts and the log are written from the goroutines of one cutAll
 	t      *testing.T
 	w      *watcher
 	clock  time.Time
@@ -36,6 +38,9 @@ func newRig(t *testing.T, auto Auto, plugs ...plugConfig) *rig {
 	r.w.settings = func() *Settings { return settings }
 	r.w.now = func() time.Time { return r.clock }
 	r.w.cut = func(_ context.Context, p plugConfig) error {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+
 		if err := r.cutErr[p.Name]; err != nil {
 			return err
 		}
@@ -44,7 +49,12 @@ func newRig(t *testing.T, auto Auto, plugs ...plugConfig) *rig {
 
 		return nil
 	}
-	r.w.log = func(format string, args ...any) { r.logs = append(r.logs, fmt.Sprintf(format, args...)) }
+	r.w.log = func(format string, args ...any) {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+
+		r.logs = append(r.logs, fmt.Sprintf(format, args...))
+	}
 
 	return r
 }
@@ -60,7 +70,9 @@ func (r *rig) look(after time.Duration) {
 func (r *rig) cut(want ...string) {
 	r.t.Helper()
 
-	if !slices.Equal(r.cuts, want) {
+	// Plugs of one printer are cut at the same time, so their order is not one.
+	got := slices.Sorted(slices.Values(r.cuts))
+	if !slices.Equal(got, slices.Sorted(slices.Values(want))) {
 		r.t.Fatalf("plugs cut so far: %v, want %v (log: %v)", r.cuts, want, r.logs)
 	}
 }
@@ -315,7 +327,7 @@ func TestARestartOfTheRulesCutsNothingThatWasAlreadyIdle(t *testing.T) {
 }
 
 func TestAHeaterOverItsLimitIsCutInAnyState(t *testing.T) {
-	for _, state := range []string{"PRINTING", "PAUSED", "ATTENTION", "IDLE", "ERROR", "OFFLINE", ""} {
+	for _, state := range []string{"PRINTING", "PAUSED", "ATTENTION", "IDLE", "ERROR", ""} { // not OFFLINE: see the offline test
 		for name, snap := range map[string]snapshot{
 			"nozzle": {State: state, Nozzle: deg(301), Bed: deg(60)},
 			"bed":    {State: state, Nozzle: deg(200), Bed: deg(151)},
@@ -396,9 +408,12 @@ func TestAnOverheatCutIsMadeAgainOnlyAfterThePrinterWentOffAndCameBackHot(t *tes
 
 	r.cut("core-one") // offline, stale: no repeats
 
-	// Someone switches it on and it is really still hot.
+	// Someone switches it on and it is really still hot: the first look back is
+	// not trusted (see the stale-reading test), the next one is.
 	r.snaps["CZPX-1"] = hot("IDLE")
 	r.look(time.Second)
+	r.cut("core-one")
+	r.look(10 * time.Second)
 	r.cut("core-one", "core-one")
 }
 
@@ -575,9 +590,11 @@ func TestAPrinterBackOnlineSoonAfterTheCutAndStillHotIsCutAgain(t *testing.T) {
 	r.snaps["CZPX-1"] = hot("OFFLINE")
 	r.look(5 * time.Second)
 
-	// Switched on again inside the minute the cut was given, and still hot.
+	// Switched on again inside the minute the cut was given, and still hot on two
+	// looks in a row.
 	r.snaps["CZPX-1"] = hot("IDLE")
 	r.look(5 * time.Second)
+	r.look(10 * time.Second)
 	r.cut("core-one", "core-one")
 }
 
@@ -649,5 +666,246 @@ func TestAReasonEndsWhenAPlugIsSeenOnOrSwitchedByAPerson(t *testing.T) {
 
 	if shown() {
 		t.Fatal("a plug switched by a person through the route still shows the module's reason")
+	}
+}
+
+var enclosure = plugConfig{Slot: 3, Name: "enclosure", Host: "enc.lan", Printer: "CZPX-1"}
+
+func TestAnIdleCutRetriesOnlyThePlugsThatFailed(t *testing.T) {
+	r := newRig(t, Auto{IdleMinutes: 1}, coreOne, enclosure)
+	r.snaps["CZPX-1"] = cool("IDLE")
+	r.cutErr["enclosure"] = errors.New("down")
+
+	r.look(0)
+	r.look(time.Minute)
+	r.cut("core-one")
+
+	// Inside the five minutes nothing is tried; after them only the plug that failed.
+	r.look(4 * time.Minute)
+	r.cut("core-one")
+
+	delete(r.cutErr, "enclosure")
+	r.look(time.Minute + time.Second)
+	r.cut("core-one", "enclosure")
+
+	// Both are off now: that is the one cut of this idle streak.
+	r.look(time.Hour)
+	r.cut("core-one", "enclosure")
+}
+
+func TestAnOverheatCutRetriesOnlyThePlugsThatFailedAtTheNextLook(t *testing.T) {
+	r := newRig(t, Auto{OverheatNozzleC: 300}, coreOne, enclosure)
+	r.snaps["CZPX-1"] = snapshot{State: "PRINTING", Nozzle: deg(320)}
+	r.cutErr["enclosure"] = errors.New("down")
+
+	r.look(0)
+	r.cut("core-one")
+
+	r.look(10 * time.Second)
+	r.cut("core-one")
+
+	r.look(40 * time.Second) // a minute in: a retry that fails does not start the printer over
+
+	delete(r.cutErr, "enclosure")
+	r.look(10 * time.Second)
+	r.cut("core-one", "enclosure")
+
+	// The minute the cut is given to show starts from the retry that took.
+	r.look(40 * time.Second)
+	r.cut("core-one", "enclosure")
+
+	r.look(21 * time.Second)
+	r.cut("core-one", "enclosure", "core-one", "enclosure")
+}
+
+func TestAPrinterThatIsOfflineIsNotJudgedOnItsLastReadings(t *testing.T) {
+	// A module restart forgets the trips; the printer was cut by hand while hot
+	// and Connect still holds its last reading.
+	r := newRig(t, Auto{OverheatNozzleC: 300, OverheatBedC: 150}, coreOne)
+	r.snaps["CZPX-1"] = snapshot{State: "OFFLINE", Nozzle: deg(320), Bed: deg(190)}
+
+	r.look(0)
+	r.look(time.Hour)
+	r.cut()
+
+	if r.w.last("core-one") != nil {
+		t.Fatal("an offline printer's last readings were taken for an overheat")
+	}
+}
+
+func TestAHotReadingRightAfterAPrinterComesBackIsConfirmedBeforeItCuts(t *testing.T) {
+	r := newRig(t, Auto{OverheatNozzleC: 300}, coreOne)
+	hot := func(state string) snapshot { return snapshot{State: state, Nozzle: deg(320)} }
+
+	r.snaps["CZPX-1"] = hot("PRINTING")
+	r.look(0)
+	r.snaps["CZPX-1"] = hot("OFFLINE")
+	r.look(5 * time.Second)
+
+	// Back, still showing the old reading; the fresh one is cool.
+	r.snaps["CZPX-1"] = hot("IDLE")
+	r.look(5 * time.Second)
+	r.snaps["CZPX-1"] = snapshot{State: "IDLE", Nozzle: deg(30)}
+	r.look(10 * time.Second)
+	r.look(time.Hour)
+	r.cut("core-one") // the first cut only
+
+	// Hot twice in a row is real, and is cut.
+	r.snaps["CZPX-1"] = hot("IDLE")
+	r.look(10 * time.Second)
+	r.look(10 * time.Second)
+	r.cut("core-one", "core-one")
+}
+
+func TestAnOverheatIsCutBeforeAnyIdleCutCanHoldItBack(t *testing.T) {
+	r := newRig(t, Auto{IdleMinutes: 1, OverheatNozzleC: 300}, coreOne, mk4s)
+	r.snaps["CZPX-1"] = cool("IDLE")
+	r.snaps["CZPX-2"] = snapshot{State: "PRINTING", Nozzle: deg(25)}
+	r.look(0)
+
+	// The idle cut of the first printer (looked at first) waits until the second
+	// printer's overheat cut has been made.
+	released := make(chan struct{})
+	inner := r.w.cut
+	r.w.cut = func(ctx context.Context, p plugConfig) error {
+		if p.Name == "core-one" {
+			select {
+			case <-released:
+			case <-time.After(5 * time.Second):
+				return errors.New("the overheat cut was queued behind an idle cut")
+			}
+		}
+
+		err := inner(ctx, p)
+		if p.Name == "mk4s" {
+			close(released)
+		}
+
+		return err
+	}
+
+	r.snaps["CZPX-2"] = snapshot{State: "PRINTING", Nozzle: deg(320)}
+	r.look(time.Minute)
+	r.cut("core-one", "mk4s")
+}
+
+func TestThePlugsOfOnePrinterAreCutTogether(t *testing.T) {
+	r := newRig(t, Auto{OverheatNozzleC: 300}, coreOne, enclosure)
+	r.snaps["CZPX-1"] = snapshot{State: "PRINTING", Nozzle: deg(320)}
+
+	entered := make(chan struct{}, 2)
+	together := make(chan struct{})
+	inner := r.w.cut
+	r.w.cut = func(ctx context.Context, p plugConfig) error {
+		entered <- struct{}{}
+
+		select {
+		case <-together:
+		case <-time.After(5 * time.Second):
+			return errors.New("the plugs were cut one after another")
+		}
+
+		return inner(ctx, p)
+	}
+
+	go func() {
+		<-entered
+		<-entered
+		close(together)
+	}()
+
+	r.look(0)
+	r.cut("core-one", "enclosure")
+}
+
+func TestAnOverheatLimitThatCannotSeeItsHeaterIsSaidOnce(t *testing.T) {
+	r := newRig(t, Auto{OverheatNozzleC: 300, OverheatBedC: 150}, coreOne)
+	said := func() int {
+		n := 0
+
+		for _, line := range r.logs {
+			if strings.Contains(line, "cannot protect") {
+				n++
+			}
+		}
+
+		return n
+	}
+
+	// No hotend reading, a bed reading: only the hotend limit is blind.
+	r.snaps["CZPX-1"] = snapshot{State: "PRINTING", Bed: deg(60)}
+	for range 5 {
+		r.look(10 * time.Second)
+	}
+
+	if said() != 1 || !strings.Contains(strings.Join(r.logs, "\n"), "hotend") {
+		t.Fatalf("log: %v, want one line about the hotend", r.logs)
+	}
+
+	// An offline printer says nothing new, a reading back re-arms the warning.
+	r.snaps["CZPX-1"] = snapshot{State: "OFFLINE"}
+	r.look(10 * time.Second)
+	r.snaps["CZPX-1"] = snapshot{State: "PRINTING", Nozzle: deg(200), Bed: deg(60)}
+	r.look(10 * time.Second)
+	r.snaps["CZPX-1"] = snapshot{State: "PRINTING", Bed: deg(60)}
+	r.look(10 * time.Second)
+
+	if said() != 2 {
+		t.Fatalf("said %d times: %v", said(), r.logs)
+	}
+
+	// Rules that watch no heater do not warn.
+	quiet := newRig(t, Auto{IdleMinutes: 1}, coreOne)
+	quiet.snaps["CZPX-1"] = snapshot{State: "PRINTING"}
+	quiet.look(0)
+	quiet.look(time.Hour)
+
+	if len(quiet.logs) != 0 {
+		t.Fatalf("an idle-only setup warned: %v", quiet.logs)
+	}
+}
+
+func TestAnOverheatLimitOnAPrinterTheHostDoesNotKnowIsSaidOnce(t *testing.T) {
+	r := newRig(t, Auto{OverheatBedC: 150}, coreOne)
+
+	for range 3 {
+		r.look(10 * time.Second)
+	}
+
+	if len(r.logs) != 1 || !strings.Contains(r.logs[0], "CZPX-1") || !strings.Contains(r.logs[0], "not known") {
+		t.Fatalf("log: %v", r.logs)
+	}
+}
+
+func TestAReadThatBeganBeforeACutDoesNotEndItsReason(t *testing.T) {
+	r := newRig(t, Auto{IdleMinutes: 1}, coreOne)
+	r.snaps["CZPX-1"] = cool("IDLE")
+	r.look(0)
+
+	mark := r.w.mark() // a read of the plug starts here and answers "on"
+
+	r.look(time.Minute) // the cut happens while it is in flight
+
+	r.w.forgetSeen("core-one", mark)
+
+	if r.w.last("core-one") == nil {
+		t.Fatal("a read from before the cut ended the reason for it")
+	}
+
+	r.w.forgetSeen("core-one", r.w.mark())
+
+	if r.w.last("core-one") != nil {
+		t.Fatal("a read from after the cut that found the plug on did not end the reason")
+	}
+}
+
+func TestAWatcherThatIsNotRunningRemembersNothing(t *testing.T) {
+	var w *watcher
+
+	w.forget("a")
+	w.forgetSeen("a", w.mark())
+
+	if w.last("a") != nil {
+		t.Fatal("a reason from nowhere")
 	}
 }
