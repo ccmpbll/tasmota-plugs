@@ -15,6 +15,7 @@
   let { plug, showPrinter = true }: Props = $props();
 
   const host = heldHost();
+  const t = host.t;
 
   // The printer by name where the fleet knows it, and by serial where it does not.
   const printer = $derived(
@@ -39,6 +40,17 @@
           </span>
         </div>
         <PlugEnergy {plug} />
+        {#if plug.auto_off && plug.on === false}
+          <p class="text-xs text-muted-foreground">
+            {t(`smart-plugs.card.auto_off.${plug.auto_off.reason}`, {
+              time: new Date(plug.auto_off.at).toLocaleString([], {
+                dateStyle: 'short',
+                timeStyle: 'short',
+              }),
+              detail: plug.auto_off.detail,
+            })}
+          </p>
+        {/if}
       </div>
       <PlugControls {plug} />
     </div>

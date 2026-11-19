@@ -83,6 +83,34 @@
                           "uptime_s": {
                             "type": "integer",
                             "description": "How long the plug has been up, in seconds."
+                          },
+                          "auto_off": {
+                            "type": "object",
+                            "description": "Why the module itself last switched this plug off, present while the plug is still off. Absent for a plug that a person switched off.",
+                            "required": [
+                              "reason",
+                              "detail",
+                              "at"
+                            ],
+                            "properties": {
+                              "reason": {
+                                "type": "string",
+                                "enum": [
+                                  "idle",
+                                  "overheat"
+                                ],
+                                "description": "idle: the printer was idle for the set time and had cooled. overheat: a heater read over its limit."
+                              },
+                              "detail": {
+                                "type": "string",
+                                "description": "The reason in a sentence."
+                              },
+                              "at": {
+                                "type": "string",
+                                "format": "date-time",
+                                "description": "When the module switched it off."
+                              }
+                            }
                           }
                         },
                         "required": [
@@ -198,6 +226,34 @@
                     "uptime_s": {
                       "type": "integer",
                       "description": "How long the plug has been up, in seconds."
+                    },
+                    "auto_off": {
+                      "type": "object",
+                      "description": "Why the module itself last switched this plug off, present while the plug is still off. Absent for a plug that a person switched off.",
+                      "required": [
+                        "reason",
+                        "detail",
+                        "at"
+                      ],
+                      "properties": {
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "idle",
+                            "overheat"
+                          ],
+                          "description": "idle: the printer was idle for the set time and had cooled. overheat: a heater read over its limit."
+                        },
+                        "detail": {
+                          "type": "string",
+                          "description": "The reason in a sentence."
+                        },
+                        "at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "When the module switched it off."
+                        }
+                      }
                     }
                   },
                   "required": [
@@ -324,6 +380,34 @@
                     "uptime_s": {
                       "type": "integer",
                       "description": "How long the plug has been up, in seconds."
+                    },
+                    "auto_off": {
+                      "type": "object",
+                      "description": "Why the module itself last switched this plug off, present while the plug is still off. Absent for a plug that a person switched off.",
+                      "required": [
+                        "reason",
+                        "detail",
+                        "at"
+                      ],
+                      "properties": {
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "idle",
+                            "overheat"
+                          ],
+                          "description": "idle: the printer was idle for the set time and had cooled. overheat: a heater read over its limit."
+                        },
+                        "detail": {
+                          "type": "string",
+                          "description": "The reason in a sentence."
+                        },
+                        "at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "When the module switched it off."
+                        }
+                      }
                     }
                   },
                   "required": [

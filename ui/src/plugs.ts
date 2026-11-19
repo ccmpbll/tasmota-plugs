@@ -30,6 +30,15 @@ export interface Plug {
   readonly energy?: Energy | undefined;
   readonly signal_dbm?: number | undefined;
   readonly uptime_s?: number | undefined;
+  /** Why the module itself switched this plug off, while it is still off. */
+  readonly auto_off?: AutoOff | undefined;
+}
+
+/** What the module did to a plug on its own, and why. */
+export interface AutoOff {
+  readonly reason: 'idle' | 'overheat';
+  readonly detail: string;
+  readonly at: string;
 }
 
 /** The plugs, and what a kilowatt-hour costs so the energy can be shown as money. */

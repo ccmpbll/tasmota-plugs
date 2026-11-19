@@ -25,6 +25,8 @@ func main() {
 	sn := flag.String("sn", "", "the printer's serial")
 	ptype := flag.String("type", "7.1.0", "the device type id (7.1.0 is a CORE One, 1.4.1 an MK4S)")
 	state := flag.String("state", "IDLE", "the state to report: IDLE, PRINTING, PAUSED")
+	nozzle := flag.Float64("nozzle", -1, "the nozzle temperature to report (default: 25 idle, 215 otherwise)")
+	bed := flag.Float64("bed", -1, "the bed temperature to report (default: 24 idle, 60 otherwise)")
 	flag.Parse()
 	if *sn == "" {
 		log.Fatal("-sn is required")
@@ -101,6 +103,12 @@ func main() {
 		if *state != "IDLE" {
 			t["temp_nozzle"], t["target_nozzle"], t["temp_bed"], t["target_bed"] = 215.0, 215, 60.0, 60
 			t["job_id"], t["progress"], t["time_printing"], t["time_remaining"] = 7, 42, 600+n*2, 1800
+		}
+		if *nozzle >= 0 {
+			t["temp_nozzle"] = *nozzle
+		}
+		if *bed >= 0 {
+			t["temp_bed"] = *bed
 		}
 		if err := conn.WriteJSON(t); err != nil {
 			log.Fatal(err)

@@ -2,6 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -147,5 +151,120 @@ func TestPriceAndCurrencyAreReadAndHeldToRules(t *testing.T) {
 	neg := -1.0
 	if err = (Settings{PricePerKWH: &neg}).validate(); err == nil {
 		t.Fatal("a negative price passed validate")
+	}
+}
+
+func TestAutomaticPowerOffIsOffUntilSet(t *testing.T) {
+	for _, body := range []string{`{}`, `{"auto_off_minutes":"","auto_off_cooldown_c":"","overheat_nozzle_c":"","overheat_bed_c":""}`, `{"auto_off_minutes":" 0 "}`} {
+		s, err := parse(t, body)
+		if err != nil {
+			t.Fatalf("%s: %v", body, err)
+		}
+
+		if s.Auto.IdleMinutes != 0 || s.Auto.OverheatNozzleC != 0 || s.Auto.OverheatBedC != 0 || s.Auto.cooldown() != 40 {
+			t.Fatalf("%s read as %+v, want everything off and a cooldown of 40", body, s.Auto)
+		}
+
+		if err := s.validate(); err != nil {
+			t.Fatalf("%s: %v", body, err)
+		}
+	}
+}
+
+func TestAutomaticPowerOffSettingsAreRead(t *testing.T) {
+	s, err := parse(t, `{"auto_off_minutes":"30","auto_off_cooldown_c":" 35 ","overheat_nozzle_c":"300","overheat_bed_c":"150"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want := (Auto{IdleMinutes: 30, CooldownC: 35, OverheatNozzleC: 300, OverheatBedC: 150}); s.Auto != want {
+		t.Fatalf("read %+v, want %+v", s.Auto, want)
+	}
+
+	if err := s.validate(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAutomaticPowerOffLimitsAreHeldToTheirRanges(t *testing.T) {
+	for key, bad := range map[string][]string{
+		"auto_off_minutes":    {"-1", "1441", "abc", "1.5", "30 min"},
+		"auto_off_cooldown_c": {"19", "101", "-5", "cold"},
+		"overheat_nozzle_c":   {"249", "501", "-1", "hot"},
+		"overheat_bed_c":      {"99", "201", "-1", "hot"},
+	} {
+		for _, value := range bad {
+			s, err := parse(t, fmt.Sprintf(`{%q:%q}`, key, value))
+			if err == nil {
+				err = s.validate()
+			}
+
+			if err == nil {
+				t.Fatalf("%s=%s was accepted", key, value)
+			}
+
+			if !strings.Contains(err.Error(), key) {
+				t.Fatalf("%s=%s was refused without naming the key: %v", key, value, err)
+			}
+		}
+	}
+
+	for key, ok := range map[string][]string{
+		"auto_off_minutes":    {"1", "1440"},
+		"auto_off_cooldown_c": {"20", "100"},
+		"overheat_nozzle_c":   {"250", "500"},
+		"overheat_bed_c":      {"100", "200"},
+	} {
+		for _, value := range ok {
+			s, err := parse(t, fmt.Sprintf(`{%q:%q}`, key, value))
+			if err == nil {
+				err = s.validate()
+			}
+
+			if err != nil {
+				t.Fatalf("%s=%s was refused: %v", key, value, err)
+			}
+		}
+	}
+}
+
+// The ranges are written in Go, in the manifest's summaries and in the page's
+// own checks. This holds the last two to the first, so a changed range cannot
+// leave the page accepting what the module refuses at start.
+func TestTheAutomaticLimitRangesAreTheSameInGoTheManifestAndThePage(t *testing.T) {
+	page, err := os.ReadFile("ui/src/plug-setup.svelte")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	manifest, err := os.ReadFile("module.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	onPage := regexp.MustCompile(`key: '(\w+)',\s+label:[^\n]*\n\s+hint:[^\n]*\n\s+low: (\d+),\s+high: (\d+),`)
+	inManifest := regexp.MustCompile(`- key: (\w+)\n\s+type: string\n\s+default: "[^"]*"\n\s+summary: "([^"]*)"`)
+
+	found := map[string][2]int{}
+
+	for _, m := range onPage.FindAllStringSubmatch(string(page), -1) {
+		low, _ := strconv.Atoi(m[2])
+		high, _ := strconv.Atoi(m[3])
+		found[m[1]] = [2]int{low, high}
+	}
+
+	summaries := map[string]string{}
+	for _, m := range inManifest.FindAllStringSubmatch(string(manifest), -1) {
+		summaries[m[1]] = m[2]
+	}
+
+	for _, limit := range autoLimits {
+		if got := found[limit.key]; got != [2]int{limit.low, limit.high} {
+			t.Errorf("the page checks %s against %v, the module against %d to %d", limit.key, got, limit.low, limit.high)
+		}
+
+		if want := fmt.Sprintf("%d to %d", limit.low, limit.high); !strings.Contains(summaries[limit.key], want) {
+			t.Errorf("the manifest says %q for %s, want it to say %q", summaries[limit.key], limit.key, want)
+		}
 	}
 }

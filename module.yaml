@@ -161,6 +161,22 @@ options:
     type: string
     default: "$"
     summary: "What the price is written in, such as $, EUR or kr. One to eight characters."
+  - key: auto_off_minutes
+    type: string
+    default: ""
+    summary: "Switch off the plugs of a printer that has been idle this many minutes and has cooled down, 1 to 1440. Empty is off. Only plugs linked to a printer."
+  - key: auto_off_cooldown_c
+    type: string
+    default: "40"
+    summary: "How cool the hotend and the bed must be, in degrees Celsius, 20 to 100, before an idle printer is switched off. Empty is 40."
+  - key: overheat_nozzle_c
+    type: string
+    default: ""
+    summary: "Switch off a printer's plugs, in any state, when a hotend reads above this, 250 to 500 degrees Celsius. Empty is off. A second layer: set it above any filament you print."
+  - key: overheat_bed_c
+    type: string
+    default: ""
+    summary: "Switch off a printer's plugs, in any state, when the bed reads above this, 100 to 200 degrees Celsius. Empty is off. A second layer: set it above any filament you print."
 
 # Every connection this module makes outside Prusa Connect, one per plug host.
 # The operator reads them before approving the install. A plug needs its own
