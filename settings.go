@@ -192,12 +192,14 @@ func (s Settings) validate() error {
 }
 
 // validName holds a plug's name to what a person can read and a route can carry:
-// text of one to 40 characters, trimmed, with nothing that ends or splits a path.
+// text of one to 40 characters, trimmed, with nothing that ends or splits a path
+// and not only dots, which a path reads as "here" and "up".
 func validName(name string) bool {
 	n := len([]rune(name))
 
 	return n >= 1 && n <= 40 &&
 		name == strings.TrimSpace(name) &&
+		strings.Trim(name, ".") != "" &&
 		!strings.ContainsAny(name, "/\\?#%") &&
 		!strings.ContainsFunc(name, unicode.IsControl)
 }

@@ -4,6 +4,7 @@
   "smart-plugs.page.title": "Tasmota Plugs",
   "smart-plugs.applying.title": "Applying your changes…",
   "smart-plugs.applying.detail": "The extension restarts to take them. This takes a few seconds, then the page comes back by itself.",
+  "smart-plugs.page.not_applied": "The extension did not come back with the saved plugs.",
   "smart-plugs.page.applying": "Saved. Applying the changes, this takes a few seconds…",
   "smart-plugs.page.failed": "The plugs could not be read: {reason}",
   "smart-plugs.page.empty.heading": "No plugs are set up",

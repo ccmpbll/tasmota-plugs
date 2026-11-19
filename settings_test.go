@@ -55,6 +55,8 @@ func TestValidateRefusesWhatCannotRun(t *testing.T) {
 		"a name with a percent":            {{Slot: 1, Name: "100%", Host: "a.lan"}},
 		"a name with a backslash":          {{Slot: 1, Name: `a\b`, Host: "a.lan"}},
 		"a name with a newline":            {{Slot: 1, Name: "a\nb", Host: "a.lan"}},
+		"a name of one dot":                {{Slot: 1, Name: ".", Host: "a.lan"}},
+		"a name of two dots":               {{Slot: 1, Name: "..", Host: "a.lan"}},
 		"a name with a tab":                {{Slot: 1, Name: "a\tb", Host: "a.lan"}},
 		"a name with a space at the start": {{Slot: 1, Name: " a", Host: "a.lan"}},
 		"a name with a space at the end":   {{Slot: 1, Name: "a ", Host: "a.lan"}},
@@ -79,6 +81,7 @@ func TestValidateRefusesWhatCannotRun(t *testing.T) {
 		{Slot: 2, Name: "MK4S (garage)", Host: "b.lan"},
 		{Slot: 3, Name: "Drucker Büro", Host: "c.lan"},
 		{Slot: 4, Name: strings.Repeat("é", 40), Host: "d.lan"},
+		{Slot: 5, Name: "v1.2", Host: "e.lan"},
 	}}
 	if err := friendly.validate(); err != nil {
 		t.Fatalf("display names were refused: %v", err)

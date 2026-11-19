@@ -7,7 +7,10 @@ const ID = 'smart-plugs-applying';
 // covered.
 const LONGEST_MS = 30_000;
 
+let expiry: ReturnType<typeof setTimeout> | undefined;
+
 export const hideApplying = (): void => {
+  clearTimeout(expiry);
   document.getElementById(ID)?.remove();
 };
 
@@ -43,5 +46,5 @@ export const showApplying = (heading: string, detail: string): void => {
   cover.addEventListener('click', hideApplying);
   document.body.append(cover);
 
-  setTimeout(hideApplying, LONGEST_MS);
+  expiry = setTimeout(hideApplying, LONGEST_MS);
 };

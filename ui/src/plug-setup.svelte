@@ -50,6 +50,7 @@
     Array.from(name).length >= 1 &&
     Array.from(name).length <= MAX_NAME &&
     name === name.trim() &&
+    !/^\.+$/.test(name) &&
     !NAME_BAD.test(name);
   const LABEL = '[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?';
   const HOST = new RegExp(`^${LABEL}(\\.${LABEL})*$`);

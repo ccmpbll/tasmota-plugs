@@ -5,7 +5,7 @@
 import type { ModuleHost } from '@prusa/connect-ui/slots';
 
 import { hideApplying } from './applying';
-import { type Plug, plugsOn, type PlugsService } from './plugs';
+import { type Plug, type PlugList, plugsOn, type PlugsService } from './plugs';
 
 // How often the list is read again. A plug can be switched from its own button
 // or app, so what was last drawn is not trusted for long.
@@ -88,13 +88,16 @@ export class PlugStore {
 
   readonly #signal: AbortSignal;
   readonly #service: PlugsService;
+  readonly #t: ModuleHost['t'];
   #timer: ReturnType<typeof setInterval> | undefined;
   #users = 0;
   #misses = 0;
+  #reading = false;
 
   constructor(host: ModuleHost, service: PlugsService = plugsOn(host)) {
     this.#signal = host.signal;
     this.#service = service;
+    this.#t = host.t;
   }
 
   /**
@@ -107,7 +110,11 @@ export class PlugStore {
       const saved = savedNames();
       if (saved) void this.settle(saved, false);
       else void this.refresh();
-      this.#timer = setInterval(() => void this.refresh(), REFRESH_MS);
+      // A tick is skipped while the last read is still out: a plug that never
+      // answers would otherwise have a new read start behind each unfinished one.
+      this.#timer = setInterval(() => {
+        if (!this.#reading) void this.refresh();
+      }, REFRESH_MS);
     }
 
     let stopped = false;
@@ -123,14 +130,21 @@ export class PlugStore {
     };
   }
 
+  // What a good read leaves behind.
+  #take(list: PlugList): void {
+    this.plugs = list.items;
+    this.pricePerKwh = list.pricePerKwh;
+    this.currency = list.currency;
+    this.failure = undefined;
+    this.#misses = 0;
+    this.loaded = true;
+  }
+
   async refresh(): Promise<void> {
+    this.#reading = true;
+
     try {
-      const list = await this.#service.list(this.#signal);
-      this.plugs = list.items;
-      this.pricePerKwh = list.pricePerKwh;
-      this.currency = list.currency;
-      this.failure = undefined;
-      this.#misses = 0;
+      this.#take(await this.#service.list(this.#signal));
     } catch (error) {
       if (!this.#signal.aborted) {
         // The last list stays on screen through a miss or two; a failure is
@@ -140,6 +154,7 @@ export class PlugStore {
           this.failure = messageOf(error);
       }
     } finally {
+      this.#reading = false;
       this.loaded = true;
     }
   }
@@ -154,6 +169,7 @@ export class PlugStore {
     if (fresh) rememberSave(names);
     this.applying = true;
     const want = [...names].sort().join('\n');
+    let why = this.#t('smart-plugs.page.not_applied');
 
     try {
       for (let tries = 0; tries < SETTLE_TRIES; tries += 1) {
@@ -167,28 +183,26 @@ export class PlugStore {
               .sort()
               .join('\n') === want
           ) {
-            this.plugs = list.items;
-            this.pricePerKwh = list.pricePerKwh;
-            this.currency = list.currency;
-            this.failure = undefined;
-            this.#misses = 0;
-            this.loaded = true;
+            this.#take(list);
             forgetSave();
             hideApplying();
 
             return;
           }
-        } catch {
+        } catch (error) {
           // Still restarting.
+          why = messageOf(error);
         }
       }
     } finally {
       this.applying = false;
     }
 
+    // It did not come back with the plugs that were saved: say so now, and the
+    // regular reads clear it if it does come back.
     forgetSave();
     hideApplying();
-    await this.refresh();
+    this.failure = why;
   }
 
   async setPower(plug: Plug, on: boolean, force = false): Promise<void> {
