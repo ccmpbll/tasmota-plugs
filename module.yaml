@@ -53,14 +53,14 @@ platforms:
 #     sink:
 #       smart-plugs:
 #         config:
-#           plug1_name: core-one
+#           plug1_name: Core One
 #           plug1_host: 192.168.1.30
 #           plug1_printer: CZPX1234X009XC12345
 options:
   - key: plug1_name
     type: string
     default: ""
-    summary: "Plug 1: the name its routes use, such as core-one. Lower-case letters, digits and hyphens. Empty names it plug1."
+    summary: "Plug 1: the name shown for it, such as Core One. Up to 40 characters, without / ? # or %. Empty names it plug1."
   - key: plug1_host
     type: string
     default: ""
@@ -72,7 +72,7 @@ options:
   - key: plug2_name
     type: string
     default: ""
-    summary: "Plug 2: the name its routes use, such as core-one. Lower-case letters, digits and hyphens. Empty names it plug2."
+    summary: "Plug 2: the name shown for it, such as Core One. Up to 40 characters, without / ? # or %. Empty names it plug2."
   - key: plug2_host
     type: string
     default: ""
@@ -84,7 +84,7 @@ options:
   - key: plug3_name
     type: string
     default: ""
-    summary: "Plug 3: the name its routes use, such as core-one. Lower-case letters, digits and hyphens. Empty names it plug3."
+    summary: "Plug 3: the name shown for it, such as Core One. Up to 40 characters, without / ? # or %. Empty names it plug3."
   - key: plug3_host
     type: string
     default: ""
@@ -96,7 +96,7 @@ options:
   - key: plug4_name
     type: string
     default: ""
-    summary: "Plug 4: the name its routes use, such as core-one. Lower-case letters, digits and hyphens. Empty names it plug4."
+    summary: "Plug 4: the name shown for it, such as Core One. Up to 40 characters, without / ? # or %. Empty names it plug4."
   - key: plug4_host
     type: string
     default: ""
@@ -108,7 +108,7 @@ options:
   - key: plug5_name
     type: string
     default: ""
-    summary: "Plug 5: the name its routes use, such as core-one. Lower-case letters, digits and hyphens. Empty names it plug5."
+    summary: "Plug 5: the name shown for it, such as Core One. Up to 40 characters, without / ? # or %. Empty names it plug5."
   - key: plug5_host
     type: string
     default: ""
@@ -120,7 +120,7 @@ options:
   - key: plug6_name
     type: string
     default: ""
-    summary: "Plug 6: the name its routes use, such as core-one. Lower-case letters, digits and hyphens. Empty names it plug6."
+    summary: "Plug 6: the name shown for it, such as Core One. Up to 40 characters, without / ? # or %. Empty names it plug6."
   - key: plug6_host
     type: string
     default: ""
@@ -132,7 +132,7 @@ options:
   - key: plug7_name
     type: string
     default: ""
-    summary: "Plug 7: the name its routes use, such as core-one. Lower-case letters, digits and hyphens. Empty names it plug7."
+    summary: "Plug 7: the name shown for it, such as Core One. Up to 40 characters, without / ? # or %. Empty names it plug7."
   - key: plug7_host
     type: string
     default: ""
@@ -144,7 +144,7 @@ options:
   - key: plug8_name
     type: string
     default: ""
-    summary: "Plug 8: the name its routes use, such as core-one. Lower-case letters, digits and hyphens. Empty names it plug8."
+    summary: "Plug 8: the name shown for it, such as Core One. Up to 40 characters, without / ? # or %. Empty names it plug8."
   - key: plug8_host
     type: string
     default: ""

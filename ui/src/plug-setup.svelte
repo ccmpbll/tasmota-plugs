@@ -43,7 +43,14 @@
 
   // The same rules the module holds the settings to at start, so a mistake is
   // found here and not as a refused start.
-  const NAME = /^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/;
+  const MAX_NAME = 40;
+  // eslint-disable-next-line no-control-regex -- control characters are what it refuses
+  const NAME_BAD = /[/\\?#%\u0000-\u001f\u007f-\u009f]/;
+  const nameOk = (name: string): boolean =>
+    Array.from(name).length >= 1 &&
+    Array.from(name).length <= MAX_NAME &&
+    name === name.trim() &&
+    !NAME_BAD.test(name);
   const LABEL = '[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?';
   const HOST = new RegExp(`^${LABEL}(\\.${LABEL})*$`);
 
@@ -170,10 +177,12 @@
     rows.map((row, index) => {
       const name = effectiveName(row, index);
       const duplicate = rows.some(
-        (other, at) => at !== index && effectiveName(other, at) === name,
+        (other, at) =>
+          at !== index &&
+          effectiveName(other, at).toLowerCase() === name.toLowerCase(),
       );
       let nameProblem: string | undefined;
-      if (!NAME.test(name)) nameProblem = t('smart-plugs.setup.error.name');
+      if (!nameOk(name)) nameProblem = t('smart-plugs.setup.error.name');
       else if (duplicate)
         nameProblem = t('smart-plugs.setup.error.duplicate', { name });
 

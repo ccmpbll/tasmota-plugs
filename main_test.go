@@ -352,3 +352,31 @@ func TestOnePlugCarriesItsEnergyToo(t *testing.T) {
 		t.Fatalf("GET /plugs/mk4s lost the energy: %s", body)
 	}
 }
+
+// A display name reaches the route as the browser wrote it, with a space as
+// %20 and a non-ASCII letter as percent-encoded bytes.
+func TestADisplayNameIsFoundByItsEncodedRoute(t *testing.T) {
+	plugs := []plugConfig{
+		{Slot: 1, Name: "Core One", Host: "core.lan", Printer: "CZPX-1"},
+		{Slot: 2, Name: "Büro (MK4S)", Host: "mk4.lan", Printer: "CZPX-2"},
+	}
+	withSettings(t, Settings{Plugs: plugs})
+	states := withFakePlugs(t, plugs...)
+
+	for path, host := range map[string]string{
+		"/plugs/Core%20One":             "core.lan",
+		"/plugs/B%C3%BCro%20%28MK4S%29": "mk4.lan",
+	} {
+		if recorder := do(http.MethodGet, path, ""); recorder.Code != http.StatusOK {
+			t.Fatalf("GET %s answered %d: %s", path, recorder.Code, recorder.Body)
+		}
+
+		if recorder := do(http.MethodPost, path+"/power", `{"on":true}`); recorder.Code != http.StatusOK {
+			t.Fatalf("POST %s/power answered %d: %s", path, recorder.Code, recorder.Body)
+		}
+
+		if *states[host] != "ON" {
+			t.Fatalf("%s did not switch %s", path, host)
+		}
+	}
+}

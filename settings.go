@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // maxPlugs is how many plugs the module can drive. The count is fixed because
@@ -72,8 +73,6 @@ type Settings struct {
 
 var (
 	slotKey = regexp.MustCompile(`^plug([0-9]+)_(name|host|printer)$`)
-	// plugName is a short route-safe name.
-	plugName = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$`)
 )
 
 // UnmarshalJSON reads the flat plug<N>_<field> keys into slots. A key that is
@@ -169,8 +168,8 @@ func (s Settings) validate() error {
 		switch {
 		case p.Host == "":
 			return fmt.Errorf("plug%d: plug%d_host is empty, and a plug needs one", p.Slot, p.Slot)
-		case !plugName.MatchString(p.Name):
-			return fmt.Errorf("plug%d_name %q is not a name: lower-case letters, digits and hyphens, at most 32", p.Slot, p.Name)
+		case !validName(p.Name):
+			return fmt.Errorf("plug%d_name %q is not a name: one to 40 characters, with no slash, question mark, hash or percent sign, and no space at either end", p.Slot, p.Name)
 		case len(p.Printer) > 64 || strings.ContainsAny(p.Printer, " \t\r\n/"):
 			return fmt.Errorf("plug%d_printer %q is not a printer serial", p.Slot, p.Printer)
 		}
@@ -179,14 +178,28 @@ func (s Settings) validate() error {
 			return fmt.Errorf("plug%d_host: %w", p.Slot, err)
 		}
 
-		if other, dup := names[p.Name]; dup {
+		// Capitals do not make two names different: "Core One" and "core one"
+		// would read as the same plug.
+		key := strings.ToLower(p.Name)
+		if other, dup := names[key]; dup {
 			return fmt.Errorf("plug%d_name and plug%d_name are both %q", other, p.Slot, p.Name)
 		}
 
-		names[p.Name] = p.Slot
+		names[key] = p.Slot
 	}
 
 	return nil
+}
+
+// validName holds a plug's name to what a person can read and a route can carry:
+// text of one to 40 characters, trimmed, with nothing that ends or splits a path.
+func validName(name string) bool {
+	n := len([]rune(name))
+
+	return n >= 1 && n <= 40 &&
+		name == strings.TrimSpace(name) &&
+		!strings.ContainsAny(name, "/\\?#%") &&
+		!strings.ContainsFunc(name, unicode.IsControl)
 }
 
 // find is the plug with this name.

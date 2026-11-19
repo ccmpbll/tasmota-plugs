@@ -46,15 +46,23 @@ func TestValidateRefusesWhatCannotRun(t *testing.T) {
 	ok := plugConfig{Slot: 1, Name: "a", Host: "a.lan"}
 
 	for name, plugs := range map[string][]plugConfig{
-		"a name with no host":    {{Slot: 1, Name: "a"}},
-		"a printer with no host": {{Slot: 1, Name: "a", Printer: "CZPX-1"}},
-		"a host with a port":     {{Slot: 1, Name: "a", Host: "a.lan:80"}},
-		"a bad name":             {{Slot: 1, Name: "Not A Name", Host: "a.lan"}},
-		"a name with a slash":    {{Slot: 1, Name: "a/b", Host: "a.lan"}},
-		"a long name":            {{Slot: 1, Name: strings.Repeat("a", 33), Host: "a.lan"}},
-		"a duplicate name":       {ok, {Slot: 2, Name: "a", Host: "b.lan"}},
-		"a serial with a space":  {{Slot: 1, Name: "a", Host: "a.lan", Printer: "CZ PX"}},
-		"a long serial":          {{Slot: 1, Name: "a", Host: "a.lan", Printer: strings.Repeat("9", 65)}},
+		"a name with no host":              {{Slot: 1, Name: "a"}},
+		"a printer with no host":           {{Slot: 1, Name: "a", Printer: "CZPX-1"}},
+		"a host with a port":               {{Slot: 1, Name: "a", Host: "a.lan:80"}},
+		"a name with a slash":              {{Slot: 1, Name: "a/b", Host: "a.lan"}},
+		"a name with a question":           {{Slot: 1, Name: "a?b", Host: "a.lan"}},
+		"a name with a hash":               {{Slot: 1, Name: "a#b", Host: "a.lan"}},
+		"a name with a percent":            {{Slot: 1, Name: "100%", Host: "a.lan"}},
+		"a name with a backslash":          {{Slot: 1, Name: `a\b`, Host: "a.lan"}},
+		"a name with a newline":            {{Slot: 1, Name: "a\nb", Host: "a.lan"}},
+		"a name with a tab":                {{Slot: 1, Name: "a\tb", Host: "a.lan"}},
+		"a name with a space at the start": {{Slot: 1, Name: " a", Host: "a.lan"}},
+		"a name with a space at the end":   {{Slot: 1, Name: "a ", Host: "a.lan"}},
+		"a long name":                      {{Slot: 1, Name: strings.Repeat("a", 41), Host: "a.lan"}},
+		"names differing in case":          {ok, {Slot: 2, Name: "A", Host: "b.lan"}},
+		"a duplicate name":                 {ok, {Slot: 2, Name: "a", Host: "b.lan"}},
+		"a serial with a space":            {{Slot: 1, Name: "a", Host: "a.lan", Printer: "CZ PX"}},
+		"a long serial":                    {{Slot: 1, Name: "a", Host: "a.lan", Printer: strings.Repeat("9", 65)}},
 	} {
 		if err := (Settings{Plugs: plugs}).validate(); err == nil {
 			t.Fatalf("%s was accepted", name)
@@ -66,6 +74,15 @@ func TestValidateRefusesWhatCannotRun(t *testing.T) {
 	}
 
 	two := Settings{Plugs: []plugConfig{ok, {Slot: 2, Name: "b-1", Host: "10.0.0.7", Printer: "CZPX-1"}}}
+	friendly := Settings{Plugs: []plugConfig{
+		{Slot: 1, Name: "Core One", Host: "a.lan"},
+		{Slot: 2, Name: "MK4S (garage)", Host: "b.lan"},
+		{Slot: 3, Name: "Drucker Büro", Host: "c.lan"},
+		{Slot: 4, Name: strings.Repeat("é", 40), Host: "d.lan"},
+	}}
+	if err := friendly.validate(); err != nil {
+		t.Fatalf("display names were refused: %v", err)
+	}
 	if err := two.validate(); err != nil {
 		t.Fatalf("two good plugs were refused: %v", err)
 	}

@@ -163,7 +163,7 @@ These are what the in-app setup edits. Up to eight plugs, each three keys,
 | key | meaning |
 | --- | --- |
 | `plug<N>_host` | the Tasmota plug's host name or IPv4 address, no port. Empty leaves the slot unused |
-| `plug<N>_name` | the name its routes use: lower-case letters, digits and hyphens, at most 32. Empty names it `plug<N>` |
+| `plug<N>_name` | the name shown for it, such as `Core One`: up to 40 characters, without `/ ? # %`, and two names may not differ only by capitals. Empty names it `plug<N>` |
 | `plug<N>_printer` | the serial of the printer it powers, as Connect shows it. Empty links no printer. Several plugs may share a printer |
 
 ```yaml
