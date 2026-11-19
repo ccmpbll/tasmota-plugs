@@ -47,7 +47,7 @@ total draw, when it has several), and a **Tasmota** tab on its page, in the tab
 bar beside Now, Controls and Files, with the same cards and buttons. A printer
 with no plug gets the tab too, with a link to set one up.
 
-**A dashboard card**, *Tasmota plugs*, can be added to any dashboard (Edit, Add a card): a row per plug with its state, what it is drawing and the same Turn on / Turn off button. Its one setting narrows it to the plugs of chosen printers; with none chosen it shows them all. The buttons are inert while the dashboard is being edited.
+**A dashboard card**, *Tasmota Plugs*, can be added to any dashboard (Edit, Add a card): a row per plug with its state, what it is drawing and the same Turn on / Turn off button. Its one setting narrows it to the plugs of chosen printers; with none chosen it shows them all. The buttons are inert while the dashboard is being edited.
 
 **Turning a printer off while it prints is guarded twice.** The app asks first when
 the linked printer is printing, paused or waiting for a person ("Cutting its power

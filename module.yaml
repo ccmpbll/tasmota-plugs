@@ -25,7 +25,7 @@ license: MIT
 # installed module. Write your own sentence here, a title if the name alone reads badly, and your name or
 # your team's beside it.
 # title: Your module's name
-title: Tasmota plugs
+title: Tasmota Plugs
 summary: Switches Tasmota smart plugs, one or more per printer, from a Tasmota Plugs page, and follows print events.
 codeowner: ccmpbll
 # The module wire major the process half speaks.
@@ -249,7 +249,7 @@ ui:
     # switch it. The one setting narrows it to the plugs of chosen printers.
     cards:
       - id: plugs
-        title: Tasmota plugs
+        title: Tasmota Plugs
         description: Buttons to turn each Tasmota plug on or off, with what it is drawing.
         size: {w: 4, h: 3}
         least: {w: 3, h: 2}

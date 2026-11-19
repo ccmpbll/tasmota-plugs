@@ -71,6 +71,6 @@
   "smart-plugs.energy.label.total": "Total",
   "smart-plugs.tab.none": "No Tasmota plug is linked to this printer.",
   "smart-plugs.tab.setup": "Set up a plug for this printer",
-  "smart-plugs.cards.plugs.heading": "Tasmota plugs",
+  "smart-plugs.cards.plugs.heading": "Tasmota Plugs",
   "smart-plugs.cards.plugs.empty": "No Tasmota plugs to show."
 }
