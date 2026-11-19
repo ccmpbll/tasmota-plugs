@@ -73,12 +73,12 @@ export class PlugStore {
     }
   }
 
-  async setPower(plug: Plug, on: boolean): Promise<void> {
+  async setPower(plug: Plug, on: boolean, force = false): Promise<void> {
     this.switching[plug.name] = true;
     this.refused[plug.name] = '';
 
     try {
-      await this.#service.setPower(plug.name, on, this.#signal);
+      await this.#service.setPower(plug.name, on, force, this.#signal);
     } catch (error) {
       if (!this.#signal.aborted) this.refused[plug.name] = messageOf(error);
     } finally {

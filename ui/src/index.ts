@@ -6,8 +6,9 @@
 import { defineModule } from '@prusa/connect-ui/slots';
 
 import { holdHost } from './host';
+import DashboardCard from './dashboard-card.svelte';
 import DeviceCard from './device-card.svelte';
-import DeviceSection from './device-section.svelte';
+import DeviceTab from './device-tab.svelte';
 import Page from './page.svelte';
 import './styles.css';
 
@@ -31,5 +32,6 @@ export default defineModule((host) => {
   // them in step by hand after that.
   host.register.page('smart-plugs', Page);
   host.register.deviceCard('smart-plugs', DeviceCard);
-  host.register.deviceSection('smart-plugs', DeviceSection);
+  host.register.deviceTab('smart-plugs', DeviceTab);
+  host.register.card('plugs', DashboardCard);
 });

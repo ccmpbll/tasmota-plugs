@@ -14,3 +14,7 @@
 - Plugs that have an energy meter show their power draw, volts and amps, today's, yesterday's and the total energy, and the Wi-Fi signal, on the Plugs page. A printer's card and Power section show its draw. `GET /plugs` and `GET /plugs/{name}` carry `energy`, `signal_dbm` and `uptime_s`, read with one request per plug.
 - The settings `price_per_kwh` and `currency` show what the energy cost. An empty price shows no cost, and a price outside 0 to 1000 refuses the start.
 - A reinstall with no plug arguments keeps the plugs saved in the app.
+- `POST /plugs/{name}/power` refuses to turn a plug off with `409 PRINTER_BUSY` while the printer it powers is printing, paused or waiting for a person, unless the request carries `"force": true`. The app sends that only after you confirm. Turning on, a plug with no printer, and a printer the server does not know are never held up.
+- A printer's page has a **Tasmota** tab in its tab bar (instead of a section at the foot of the Now tab), and its card in the Printers list reads `Tasmota: On · 14 W`.
+- The Plugs page shows the meter as labelled figures (Power, Voltage, Current, Today, Yesterday, Total), without the Wi-Fi signal.
+- A dashboard card, Tasmota plugs: a row per plug with its state, its draw and a Turn on or Turn off button (with the same confirmation before cutting the power of a printer that is printing). Its setting narrows it to the plugs of chosen printers.

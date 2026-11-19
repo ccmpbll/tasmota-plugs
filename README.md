@@ -8,7 +8,7 @@ self-hosted server) that is one Go process. It drives up to eight Tasmota
 smart plugs over HTTP, one or more per printer, shows what each one is drawing,
 and logs the print events of the printers the host lets it observe. It adds a
 Plugs page under Extensions in the app, where the plugs are also set up, and a
-Power line and section for each printer that has a plug. `make new-module` wrote the skeleton.
+Tasmota line and tab for each printer that has a plug, and a dashboard card.
 
 Today it switches nothing by itself: each print event is only logged, with the
 plugs linked to its printer. Auto-off after a print and a thermal check are the
@@ -18,7 +18,7 @@ obvious next steps.
 | --- | --- |
 | `GET /plugs` | every plug, with its state and meter (`energy`, `signal_dbm`, `uptime_s`), and the price. A plug that does not answer is a row with `on: null` and an `error` |
 | `GET /plugs/{name}` | one plug, the same way |
-| `POST /plugs/{name}/power` | `{"on": true\|false}` switches it, and succeeds only when the plug answers 200 with the state asked for |
+| `POST /plugs/{name}/power` | `{"on": true\|false, "force"?: true}` switches it, and succeeds only when the plug answers 200 with the state asked for. Turning off is refused with `409 PRINTER_BUSY` while the printer is busy, unless `force` |
 
 All are under `/api/v1/modules/com.github.aux.ccmpbll.prusa-connect-tasmota/`.
 
@@ -37,19 +37,28 @@ Extensions → Smart plugs.
 **The Plugs page** has a card per plug: name, host, linked printer, state (On,
 Off, or Not answering with the reason) and one button: Turn on when it is off,
 Turn off when it is on, both when it does not answer. Under it, what the plug's
-meter reports (when it has one): power draw now in watts, volts and amps, energy
-today, yesterday and in total (with the cost when a price is set), and the Wi-Fi
-signal. It refreshes every five seconds.
+meter reports (when it has one), as labelled figures: Power, Voltage and Current
+now, and Today, Yesterday and Total energy in kWh (with what it cost under each,
+when a price is set). It refreshes every five seconds.
 
 **On each printer that has a plug** (linked by serial): a line on its card in
-the Printers list, `Power: On · 14 W` (or each plug's name and state, and the
-total draw, when it has several), and a Power section at the foot of its Now tab
-with the same buttons. A printer with no plug shows neither, and offers a link to
-set one up once any plug exists.
+the Printers list, `Tasmota: On · 14 W` (or each plug's name and state, and the
+total draw, when it has several), and a **Tasmota** tab on its page, in the tab
+bar beside Now, Controls and Files, with the same cards and buttons. A printer
+with no plug gets the tab too, with a link to set one up.
 
-When the linked printer is printing or paused, Turn off asks first, since cutting
-its power ruins the print. Whether an account may switch plugs or change the setup
-is the host's call: a refusal shows its reason.
+**A dashboard card**, *Tasmota plugs*, can be added to any dashboard (Edit, Add a card): a row per plug with its state, what it is drawing and the same Turn on / Turn off button. Its one setting narrows it to the plugs of chosen printers; with none chosen it shows them all. The buttons are inert while the dashboard is being edited.
+
+**Turning a printer off while it prints is guarded twice.** The app asks first when
+the linked printer is printing, paused or waiting for a person ("Cutting its power
+will ruin the print"). And the module itself refuses: `POST /plugs/{name}/power`
+with `{"on": false}` answers `409 PRINTER_BUSY` in those states, whoever calls it,
+unless the request carries `"force": true`, which the app sends only after you
+confirm. Turning a plug on is never held up, nor is a plug with no printer linked,
+nor a printer the server does not know (offline or frozen: the plug may be the only
+way to restart it). If the module cannot read the printer's state, it does not
+block the switch, and says so in its log. Whether an account may switch plugs or
+change the setup is the host's call: a refusal shows its reason.
 
 The page is Svelte, built with Connect's component library in a Node container,
 so nothing is installed on your machine:

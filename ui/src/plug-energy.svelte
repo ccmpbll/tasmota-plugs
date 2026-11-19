@@ -7,17 +7,20 @@
 
   interface Props {
     plug: Plug;
-    /** Watts and today's energy only, for a printer's own page. */
-    compact?: boolean;
   }
 
-  let { plug, compact = false }: Props = $props();
+  let { plug }: Props = $props();
 
   const host = heldHost();
   const t = host.t;
   const store = storeFor(host);
 
-  const e = $derived(plug.energy);
+  interface Stat {
+    label: string;
+    value: string;
+    /** What the energy cost, when the operator set a price. */
+    cost?: string | undefined;
+  }
 
   const number = (value: number, digits: number): string =>
     formatNumber(value, {
@@ -35,59 +38,65 @@
       : `${amount} ${store.currency}`;
   };
 
-  const energyLine = (
-    key: string,
-    kwh: number | undefined,
-  ): string | undefined => {
-    if (kwh === undefined) return undefined;
-    const cost = money(kwh);
+  const energy = (label: string, kwh: number | undefined): Stat | undefined =>
+    kwh === undefined
+      ? undefined
+      : {
+          label,
+          value: t('smart-plugs.energy.kwh', { kwh: number(kwh, 2) }),
+          cost: money(kwh),
+        };
 
-    return cost === undefined
-      ? t(key, { kwh: number(kwh, 2) })
-      : t(`${key}_priced`, { kwh: number(kwh, 2), cost });
-  };
+  const e = $derived(plug.energy);
 
-  const live = $derived(
+  // What the plug is drawing now, then what it has used.
+  const live = $derived.by((): Stat[] =>
     [
       e?.watts === undefined
         ? undefined
-        : t('smart-plugs.energy.watts', { watts: number(e.watts, 0) }),
-      compact || e?.volts === undefined
+        : {
+            label: t('smart-plugs.energy.label.power'),
+            value: t('smart-plugs.energy.watts', { watts: number(e.watts, 0) }),
+          },
+      e?.volts === undefined
         ? undefined
-        : t('smart-plugs.energy.volts', { volts: number(e.volts, 0) }),
-      compact || e?.amps === undefined
+        : {
+            label: t('smart-plugs.energy.label.voltage'),
+            value: t('smart-plugs.energy.volts', { volts: number(e.volts, 0) }),
+          },
+      e?.amps === undefined
         ? undefined
-        : t('smart-plugs.energy.amps', { amps: number(e.amps, 2) }),
-    ].filter((part) => part !== undefined),
+        : {
+            label: t('smart-plugs.energy.label.current'),
+            value: t('smart-plugs.energy.amps', { amps: number(e.amps, 2) }),
+          },
+    ].filter((stat) => stat !== undefined),
   );
-  const totals = $derived(
+  const used = $derived.by((): Stat[] =>
     [
-      energyLine('smart-plugs.energy.today', e?.today_kwh),
-      compact
-        ? undefined
-        : energyLine('smart-plugs.energy.yesterday', e?.yesterday_kwh),
-      compact
-        ? undefined
-        : energyLine('smart-plugs.energy.total', e?.total_kwh),
-    ].filter((part) => part !== undefined),
-  );
-  const signal = $derived(
-    compact || plug.signal_dbm === undefined
-      ? undefined
-      : t('smart-plugs.energy.signal', { dbm: plug.signal_dbm }),
+      energy(t('smart-plugs.energy.label.today'), e?.today_kwh),
+      energy(t('smart-plugs.energy.label.yesterday'), e?.yesterday_kwh),
+      energy(t('smart-plugs.energy.label.total'), e?.total_kwh),
+    ].filter((stat) => stat !== undefined),
   );
 </script>
 
-{#if live.length > 0 || totals.length > 0}
-  <div class="flex flex-col gap-0.5 text-xs text-muted-foreground">
-    {#if live.length > 0}
-      <span class="text-sm text-foreground">{live.join(' · ')}</span>
-    {/if}
-    {#if totals.length > 0}
-      <span>{totals.join(' · ')}</span>
-    {/if}
-    {#if signal}
-      <span>{signal}</span>
-    {/if}
+{#if live.length > 0 || used.length > 0}
+  <div class="flex flex-col gap-3">
+    {#each [live, used] as row, index (index)}
+      {#if row.length > 0}
+        <dl class="grid grid-cols-3 gap-x-8 gap-y-1">
+          {#each row as stat (stat.label)}
+            <div class="flex flex-col">
+              <dt class="text-xs text-muted-foreground">{stat.label}</dt>
+              <dd class="text-sm">{stat.value}</dd>
+              {#if stat.cost}
+                <dd class="text-xs text-muted-foreground">{stat.cost}</dd>
+              {/if}
+            </div>
+          {/each}
+        </dl>
+      {/if}
+    {/each}
   </div>
 {/if}

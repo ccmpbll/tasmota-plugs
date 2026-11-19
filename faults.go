@@ -48,6 +48,17 @@ var (
 		fault.ShowDetail,
 	))
 
+	// PrinterBusy is a switch off of a plug whose printer is printing or paused.
+	PrinterBusy = fault.Register(faultDomain, "PRINTER_BUSY", http.StatusConflict, fault.Document(
+		"The printer is printing, so its plug was not switched off",
+		`Wait for the print to end, or send {"on": false, "force": true} if cutting the power is meant.`,
+		fault.RetryNever,
+		fault.ShowDetail,
+		"name",
+		"printer",
+		"state",
+	))
+
 	// PlugNotFound is a call to a plug no setting names.
 	PlugNotFound = fault.Register(faultDomain, "PLUG_NOT_FOUND", http.StatusNotFound, fault.Document(
 		"No plug has that name",

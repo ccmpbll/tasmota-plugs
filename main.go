@@ -130,6 +130,8 @@ func run() error {
 	fmt.Fprintf(os.Stderr, "%s %s is serving on stdio as pid %d\n", name, release, os.Getpid())
 
 	devices := deviceapi.NewClient(conn)
+	printerState = stateReader(devices)
+
 	events := &follower{
 		log: slog.New(slog.NewTextHandler(os.Stderr, nil)),
 		subscribe: func(ctx context.Context, p busapi.SubscribeParams, on func(busapi.Window) error) error {
@@ -230,6 +232,9 @@ func routes() http.Handler {
 	mux.HandleFunc("POST /plugs/{name}/power", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			On *bool `json:"on"`
+			// Force switches a plug off although its printer is busy. The app sends
+			// it after a person has confirmed, and nothing else should.
+			Force bool `json:"force"`
 		}
 
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10))
@@ -244,6 +249,21 @@ func routes() http.Handler {
 		config, p, ok := resolve(w, r)
 		if !ok {
 			return
+		}
+
+		// Cutting the power of a printer that is printing ruins the print, so a
+		// switch off is refused unless the request says it is meant. Switching on,
+		// and a plug that powers no printer, are never held up.
+		if !*body.On && !body.Force && config.Printer != "" {
+			if busy, state := printerBusy(r.Context(), config.Printer); busy {
+				refuse(w, r, PrinterBusy.New("the printer is "+state+", so its plug is not switched off").With(
+					fault.StringParam("name", config.Name),
+					fault.StringParam("printer", config.Printer),
+					fault.StringParam("state", state),
+				))
+
+				return
+			}
 		}
 
 		ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)

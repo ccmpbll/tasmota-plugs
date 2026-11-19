@@ -42,7 +42,13 @@ export interface PlugList {
 /** What the page needs of the module's routes. A test hands in a fake. */
 export interface PlugsService {
   list(signal?: AbortSignal): Promise<PlugList>;
-  setPower(name: string, on: boolean, signal?: AbortSignal): Promise<void>;
+  /** `force` switches a plug off although its printer is busy; send it only after a person confirmed. */
+  setPower(
+    name: string,
+    on: boolean,
+    force: boolean,
+    signal?: AbortSignal,
+  ): Promise<void>;
 }
 
 /** The routes, bound onto the client the host handed this module. */
@@ -59,8 +65,11 @@ export const plugsOn = (host: ModuleHost): PlugsService => {
         currency: answer.currency,
       };
     },
-    setPower: async (name, on, signal) => {
-      await routes.setPlugPower({ path: { name }, body: { on } }, signal);
+    setPower: async (name, on, force, signal) => {
+      await routes.setPlugPower(
+        { path: { name }, body: force ? { on, force } : { on } },
+        signal,
+      );
     },
   };
 };

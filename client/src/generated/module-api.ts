@@ -55,7 +55,7 @@ export interface paths {
         put?: never;
         /**
          * Switch one plug
-         * @description Sends Power On or Power Off to the named plug and reports success only when the plug answers 200 with the state that was asked for. The host takes operate_resource on the module's instance before this is called.
+         * @description Sends Power On or Power Off to the named plug and reports success only when the plug answers 200 with the state that was asked for. The host takes operate_resource on the module's instance before this is called. Turning a plug off is refused with 409 PRINTER_BUSY while the printer it powers is printing, paused or waiting for a person in the middle of a print, unless `force` is true.
          */
         post: operations["set-plug-power"];
         delete?: never;
@@ -207,6 +207,8 @@ export interface operations {
             content: {
                 "application/json": {
                     on: boolean;
+                    /** @description Switch the plug off although its printer is printing or paused. Send it only when cutting the power is meant. Ignored when turning on. */
+                    force?: boolean;
                 };
             };
         };
@@ -256,6 +258,13 @@ export interface operations {
             };
             /** @description No plug has that name (PLUG_NOT_FOUND). */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The printer the plug powers is printing or paused, and `force` was not set (PRINTER_BUSY). */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
