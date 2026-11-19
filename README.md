@@ -317,6 +317,5 @@ marketplace settings.
 
 ## License
 
-AGPL-3.0-only (see `LICENSE`). The module is built against Prusa Connect's SDK,
-which Prusa publishes under its own Open Community License; check that the two sit
-together for your use before redistributing builds.
+MIT (see `LICENSE`). It is built against Prusa Connect's SDK, which Prusa publishes
+under its own licence; Prusa's own example extension is MIT as well.
