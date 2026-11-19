@@ -4,6 +4,7 @@
 // so a printers list of ten cards does not read the plugs ten times.
 import type { ModuleHost } from '@prusa/connect-ui/slots';
 
+import { hideApplying } from './applying';
 import { type Plug, plugsOn, type PlugsService } from './plugs';
 
 // How often the list is read again. A plug can be switched from its own button
@@ -173,6 +174,7 @@ export class PlugStore {
             this.#misses = 0;
             this.loaded = true;
             forgetSave();
+            hideApplying();
 
             return;
           }
@@ -185,6 +187,7 @@ export class PlugStore {
     }
 
     forgetSave();
+    hideApplying();
     await this.refresh();
   }
 

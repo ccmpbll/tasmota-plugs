@@ -14,6 +14,7 @@
     SelectValue,
   } from '@prusa/connect-ui/primitives';
 
+  import { showApplying } from './applying';
   import { heldHost } from './host';
   import { storeFor } from './store.svelte';
 
@@ -253,6 +254,10 @@
       );
       // The module restarts to take the new settings. Close at once and let
       // the store wait for it quietly, with the page saying so meanwhile.
+      showApplying(
+        t('smart-plugs.applying.title'),
+        t('smart-plugs.applying.detail'),
+      );
       void store.settle(rows.map((row, index) => effectiveName(row, index)));
       onclose();
     } catch (error) {

@@ -2,6 +2,8 @@
   "_meta.language": "English",
   "_meta.note": "This module's own texts. The host reads this file from locales/en.json beside the bundle's entry and merges it under the module's namespace. Copy it to <tag>.json to translate; a key you leave out falls back to the line here.",
   "smart-plugs.page.title": "Tasmota Plugs",
+  "smart-plugs.applying.title": "Applying your changes…",
+  "smart-plugs.applying.detail": "The extension restarts to take them. This takes a few seconds, then the page comes back by itself.",
   "smart-plugs.page.applying": "Saved. Applying the changes, this takes a few seconds…",
   "smart-plugs.page.failed": "The plugs could not be read: {reason}",
   "smart-plugs.page.empty.heading": "No plugs are set up",
