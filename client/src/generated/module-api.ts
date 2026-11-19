@@ -119,6 +119,21 @@ export interface operations {
                             signal_dbm?: number;
                             /** @description How long the plug has been up, in seconds. */
                             uptime_s?: number;
+                            /** @description Why the module itself last switched this plug off, present while the plug is still off. Absent for a plug that a person switched off. */
+                            auto_off?: {
+                                /**
+                                 * @description idle: the printer was idle for the set time and had cooled. overheat: a heater read over its limit.
+                                 * @enum {string}
+                                 */
+                                reason: "idle" | "overheat";
+                                /** @description The reason in a sentence. */
+                                detail: string;
+                                /**
+                                 * Format: date-time
+                                 * @description When the module switched it off.
+                                 */
+                                at: string;
+                            };
                         }[];
                         /** @description What a kilowatt-hour costs, or null when no price is set. */
                         price_per_kwh?: number | null;
@@ -174,6 +189,21 @@ export interface operations {
                         signal_dbm?: number;
                         /** @description How long the plug has been up, in seconds. */
                         uptime_s?: number;
+                        /** @description Why the module itself last switched this plug off, present while the plug is still off. Absent for a plug that a person switched off. */
+                        auto_off?: {
+                            /**
+                             * @description idle: the printer was idle for the set time and had cooled. overheat: a heater read over its limit.
+                             * @enum {string}
+                             */
+                            reason: "idle" | "overheat";
+                            /** @description The reason in a sentence. */
+                            detail: string;
+                            /**
+                             * Format: date-time
+                             * @description When the module switched it off.
+                             */
+                            at: string;
+                        };
                     };
                 };
             };
@@ -246,6 +276,21 @@ export interface operations {
                         signal_dbm?: number;
                         /** @description How long the plug has been up, in seconds. */
                         uptime_s?: number;
+                        /** @description Why the module itself last switched this plug off, present while the plug is still off. Absent for a plug that a person switched off. */
+                        auto_off?: {
+                            /**
+                             * @description idle: the printer was idle for the set time and had cooled. overheat: a heater read over its limit.
+                             * @enum {string}
+                             */
+                            reason: "idle" | "overheat";
+                            /** @description The reason in a sentence. */
+                            detail: string;
+                            /**
+                             * Format: date-time
+                             * @description When the module switched it off.
+                             */
+                            at: string;
+                        };
                     };
                 };
             };

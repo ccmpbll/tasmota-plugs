@@ -281,6 +281,12 @@ func TestTheManifestDeclaresEverySlotAndItsEgress(t *testing.T) {
 		t.Fatalf("module.yaml names a slot past maxPlugs (%d)", maxPlugs)
 	}
 
+	for _, key := range []string{"auto_off_minutes", "auto_off_cooldown_c", "overheat_nozzle_c", "overheat_bed_c"} {
+		if !strings.Contains(text, "key: "+key+"\n") {
+			t.Fatalf("module.yaml declares no option %s", key)
+		}
+	}
+
 	if !strings.Contains(text, "- observe") {
 		t.Fatal("module.yaml does not ask for observe")
 	}
@@ -288,7 +294,7 @@ func TestTheManifestDeclaresEverySlotAndItsEgress(t *testing.T) {
 
 // TestNoSettingIsReadFromTheEnvironment keeps every setting in the manifest.
 func TestNoSettingIsReadFromTheEnvironment(t *testing.T) {
-	for _, file := range []string{"main.go", "tasmota.go", "follower.go"} {
+	for _, file := range []string{"main.go", "tasmota.go", "follower.go", "auto.go"} {
 		source, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatalf("read %s: %v", file, err)

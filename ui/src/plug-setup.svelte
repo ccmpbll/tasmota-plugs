@@ -55,6 +55,43 @@
   const LABEL = '[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?';
   const HOST = new RegExp(`^${LABEL}(\\.${LABEL})*$`);
 
+  // The automatic power-off limits, each a whole number in a range, or empty.
+  // The ranges are the module's own, so a mistake is found here.
+  const AUTO = [
+    {
+      key: 'auto_off_minutes',
+      label: 'smart-plugs.setup.auto.minutes',
+      hint: 'smart-plugs.setup.auto.minutes.hint',
+      low: 1,
+      high: 1440,
+      placeholder: '30',
+    },
+    {
+      key: 'auto_off_cooldown_c',
+      label: 'smart-plugs.setup.auto.cooldown',
+      hint: 'smart-plugs.setup.auto.cooldown.hint',
+      low: 20,
+      high: 100,
+      placeholder: '40',
+    },
+    {
+      key: 'overheat_nozzle_c',
+      label: 'smart-plugs.setup.auto.nozzle',
+      hint: 'smart-plugs.setup.auto.nozzle.hint',
+      low: 250,
+      high: 500,
+      placeholder: '300',
+    },
+    {
+      key: 'overheat_bed_c',
+      label: 'smart-plugs.setup.auto.bed',
+      hint: 'smart-plugs.setup.auto.bed.hint',
+      low: 100,
+      high: 200,
+      placeholder: '150',
+    },
+  ] as const;
+
   interface Row {
     readonly id: number;
     name: string;
@@ -68,6 +105,7 @@
   let rows = $state<Row[]>([]);
   let price = $state('');
   let currency = $state(DEFAULT_CURRENCY);
+  let auto = $state<Record<string, string>>({});
   let loading = $state(true);
   let saving = $state(false);
   let failure = $state<string | undefined>();
@@ -131,6 +169,7 @@
       rows = read;
       price = word(config, 'price_per_kwh');
       currency = word(config, 'currency') || DEFAULT_CURRENCY;
+      auto = Object.fromEntries(AUTO.map((f) => [f.key, word(config, f.key)]));
     } catch (error) {
       if (!host.signal.aborted)
         failure = t('smart-plugs.setup.error.load', {
@@ -212,12 +251,28 @@
       : undefined,
   );
 
+  const autoProblems = $derived(
+    AUTO.map((f) => {
+      const text = (auto[f.key] ?? '').trim();
+      if (text === '') return undefined;
+      const value = Number(text);
+
+      return /^[0-9]+$/.test(text) && value >= f.low && value <= f.high
+        ? undefined
+        : t('smart-plugs.setup.error.whole', {
+            low: String(f.low),
+            high: String(f.high),
+          });
+    }),
+  );
+
   const valid = $derived(
     view.every(
       (v) => v.nameProblem === undefined && v.hostProblem === undefined,
     ) &&
       priceProblem === undefined &&
-      currencyProblem === undefined,
+      currencyProblem === undefined &&
+      autoProblems.every((p) => p === undefined),
   );
 
   const add = (): void => {
@@ -245,6 +300,7 @@
     }
     settings.price_per_kwh = price.trim();
     settings.currency = currency.trim() || DEFAULT_CURRENCY;
+    for (const f of AUTO) settings[f.key] = (auto[f.key] ?? '').trim();
 
     try {
       await host.client.putResource(
@@ -426,6 +482,38 @@
             {#if currencyProblem}
               <p class="text-xs text-destructive-text">{currencyProblem}</p>
             {/if}
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-3 border-t pt-4">
+          <div class="flex flex-col gap-1">
+            <h3 class="text-sm font-medium">
+              {t('smart-plugs.setup.auto.title')}
+            </h3>
+            <p class="text-xs text-muted-foreground">
+              {t('smart-plugs.setup.auto.description')}
+            </p>
+          </div>
+          <div class="grid gap-3 md:grid-cols-2">
+            {#each AUTO as field, at (field.key)}
+              <div class="flex flex-col gap-1">
+                <Label for={`auto-${field.key}`}>{t(field.label)}</Label>
+                <Input
+                  id={`auto-${field.key}`}
+                  value={auto[field.key] ?? ''}
+                  oninput={(event: Event) => (auto[field.key] = typed(event))}
+                  inputmode="numeric"
+                  placeholder={field.placeholder}
+                  aria-invalid={autoProblems[at] !== undefined}
+                />
+                <p class="text-xs text-muted-foreground">{t(field.hint)}</p>
+                {#if autoProblems[at]}
+                  <p class="text-xs text-destructive-text">
+                    {autoProblems[at]}
+                  </p>
+                {/if}
+              </div>
+            {/each}
           </div>
         </div>
       </div>

@@ -43,6 +43,87 @@ func validPrice(price float64) bool {
 	return !math.IsNaN(price) && price >= 0 && price <= maxPrice
 }
 
+// Automatic power-off. Each limit is a whole number the module refuses outside
+// its range, so a typo cannot cut a print's power in the middle of normal use:
+// the overheat limits sit above anything a Prusa printer does on purpose.
+const (
+	maxIdleMinutes    = 24 * 60
+	minCooldownC      = 20
+	maxCooldownC      = 100
+	defaultCooldownC  = 40
+	minOverheatNozzle = 250
+	maxOverheatNozzle = 500
+	minOverheatBed    = 100
+	maxOverheatBed    = 200
+)
+
+// Auto is what the module does to a plug on its own, for the plugs that are
+// linked to a printer. Each part is off until it is set.
+type Auto struct {
+	// IdleMinutes cuts a printer's plugs once it has been idle this long and has
+	// cooled to CooldownC. Zero is off.
+	IdleMinutes int
+	// CooldownC is how cool the hotend and the bed must be, in degrees, before an
+	// idle printer is cut. It has a default, so a printer is never cut hot.
+	CooldownC int
+	// OverheatNozzleC and OverheatBedC cut a printer's plugs, in any state, when
+	// a heater reads above them. Zero is off. A second layer: the printer's own
+	// firmware stops a runaway heater first.
+	OverheatNozzleC int
+	OverheatBedC    int
+}
+
+// parseWhole reads a whole number, or zero for empty. Whether it is in range is
+// validate's to say, so the rule is written once.
+func parseWhole(key, text string) (int, error) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return 0, nil
+	}
+
+	n, err := strconv.Atoi(text)
+	if err != nil {
+		return 0, fmt.Errorf("%s %q is not a whole number", key, text)
+	}
+
+	return n, nil
+}
+
+// cooldown is CooldownC, or the default when none is set.
+func (a Auto) cooldown() int {
+	if a.CooldownC == 0 {
+		return defaultCooldownC
+	}
+
+	return a.CooldownC
+}
+
+// validate holds each limit to its range. Zero is off, and for the cooldown the
+// default.
+func (a Auto) validate() error {
+	for _, limit := range []struct {
+		key       string
+		value     int
+		low, high int
+		zeroOK    bool
+	}{
+		{"auto_off_minutes", a.IdleMinutes, 1, maxIdleMinutes, true},
+		{"auto_off_cooldown_c", a.CooldownC, minCooldownC, maxCooldownC, true},
+		{"overheat_nozzle_c", a.OverheatNozzleC, minOverheatNozzle, maxOverheatNozzle, true},
+		{"overheat_bed_c", a.OverheatBedC, minOverheatBed, maxOverheatBed, true},
+	} {
+		if limit.value == 0 && limit.zeroOK {
+			continue
+		}
+
+		if limit.value < limit.low || limit.value > limit.high {
+			return fmt.Errorf("%s %d is not allowed: a whole number from %d to %d, or empty for off", limit.key, limit.value, limit.low, limit.high)
+		}
+	}
+
+	return nil
+}
+
 // plugConfig is one configured plug: a Tasmota relay, and optionally the
 // printer it powers.
 type plugConfig struct {
@@ -69,6 +150,8 @@ type Settings struct {
 	PricePerKWH *float64
 	// Currency is what a price is written in, such as $ or EUR.
 	Currency string
+	// Auto is the module's own power-off rules.
+	Auto Auto
 }
 
 var (
@@ -102,6 +185,12 @@ func (s *Settings) UnmarshalJSON(data []byte) error {
 		case "currency":
 			if value = strings.TrimSpace(value); value != "" {
 				s.Currency = value
+			}
+
+			continue
+		case "auto_off_minutes", "auto_off_cooldown_c", "overheat_nozzle_c", "overheat_bed_c":
+			if err := s.Auto.set(key, value); err != nil {
+				return err
 			}
 
 			continue
@@ -151,6 +240,27 @@ func (s *Settings) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// set reads one of the automatic power-off keys.
+func (a *Auto) set(key, value string) error {
+	n, err := parseWhole(key, value)
+	if err != nil {
+		return err
+	}
+
+	switch key {
+	case "auto_off_minutes":
+		a.IdleMinutes = n
+	case "auto_off_cooldown_c":
+		a.CooldownC = n
+	case "overheat_nozzle_c":
+		a.OverheatNozzleC = n
+	case "overheat_bed_c":
+		a.OverheatBedC = n
+	}
+
+	return nil
+}
+
 // validate refuses a setting the module cannot run on, so the start fails with
 // the reason and not the first request.
 func (s Settings) validate() error {
@@ -160,6 +270,10 @@ func (s Settings) validate() error {
 
 	if n := len([]rune(s.Currency)); s.Currency != "" && (n > 8 || strings.ContainsAny(s.Currency, " \t\r\n")) {
 		return fmt.Errorf("currency %q is not a currency symbol: one to eight characters, no spaces", s.Currency)
+	}
+
+	if err := s.Auto.validate(); err != nil {
+		return err
 	}
 
 	names := map[string]int{}

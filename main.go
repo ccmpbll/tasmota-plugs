@@ -130,7 +130,9 @@ func run() error {
 	fmt.Fprintf(os.Stderr, "%s %s is serving on stdio as pid %d\n", name, release, os.Getpid())
 
 	devices := deviceapi.NewClient(conn)
-	printerState = stateReader(devices)
+	snapshots := readSnapshots(devices)
+	printerState = stateReader(snapshots)
+	auto = newWatcher(snapshots)
 
 	events := &follower{
 		log: slog.New(slog.NewTextHandler(os.Stderr, nil)),
@@ -145,6 +147,7 @@ func run() error {
 	}
 
 	go events.Run(ctx)
+	go auto.Run(ctx)
 
 	if err = conn.Serve(ctx); err != nil {
 		return fmt.Errorf("serve: %w", err)
@@ -302,14 +305,23 @@ type plugView struct {
 	Energy        *Energy `json:"energy,omitempty"`
 	SignalDBm     *int    `json:"signal_dbm,omitempty"`
 	UptimeSeconds *int64  `json:"uptime_s,omitempty"`
+	// AutoOff is why the module itself last switched this plug off, shown while
+	// it is still off so an outage is explained.
+	AutoOff *autoEvent `json:"auto_off,omitempty"`
 }
 
 // viewOf is a plug and what it just said.
 func viewOf(config plugConfig, r Reading) plugView {
-	return plugView{
+	view := plugView{
 		Name: config.Name, Host: config.Host, Printer: config.Printer, On: &r.On,
 		Energy: r.Energy, SignalDBm: r.SignalDBm, UptimeSeconds: r.UptimeSeconds,
 	}
+
+	if auto != nil && !r.On {
+		view.AutoOff = auto.last(config.Name)
+	}
+
+	return view
 }
 
 // readAll asks every plug for its state at once. A plug that does not answer

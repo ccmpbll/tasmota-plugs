@@ -84,7 +84,9 @@ answers on is built from it.
 | `CHANGELOG.md` | what an operator sees change when they upgrade this module |
 | `.vscode/extensions.json` | the editor extensions for the languages in here |
 | `main.go` | the process: the handshake, the lifecycle set and the routes |
-| `settings.go` | the eight plug slots: parsing, validation, and the plug-to-printer link by serial |
+| `settings.go` | the eight plug slots and the automatic power-off limits: parsing, validation, and the plug-to-printer link by serial |
+| `auto.go` | the watcher that switches printers off when idle and cooled, or overheating, and remembers why |
+| `guard.go` | the printing guard on switching off |
 | `tasmota.go` | the Tasmota HTTP client: host check, status and echo checks, no redirects, bounded answers |
 | `follower.go` | subscribes to `device.job.started` and `device.job.settled` and logs each, resuming from the last cursor |
 | `faults.go` | every code this module refuses with, each documented once |
@@ -183,6 +185,42 @@ resources:
 | --- | --- |
 | `price_per_kwh` | what a kilowatt-hour costs, such as `0.14`. Empty shows no cost |
 | `currency` | what the price is written in, such as `$` or `EUR`. Default `$` |
+
+### Switching printers off on its own
+
+Two rules, both off until set, both for plugs linked to a printer. **Set up
+plugs** has a section for them.
+
+| key | meaning |
+| --- | --- |
+| `auto_off_minutes` | switch the plugs off once the printer has been idle this long (`IDLE`, `READY`, `FINISHED` or `STOPPED`) and has cooled, 1 to 1440. Empty is off |
+| `auto_off_cooldown_c` | how cool the hotend and the bed must both be first, 20 to 100. Empty is 40 |
+| `overheat_nozzle_c` | switch the plugs off, in any state, when a hotend reads above this, 250 to 500. Empty is off |
+| `overheat_bed_c` | the same for the bed, 100 to 200. Empty is off |
+
+The module looks at the printers every ten seconds, through the same device API
+the printing guard uses, and reads the state and the temperatures
+(`/tools/<n>/nozzle_temp`, `/temperature/bed`) from each printer's state. Notes
+on what it does:
+
+- A printer is switched off once for each time it goes idle. It goes offline with
+  its power, and when it is switched on again it is a new idle streak, so it
+  waits the full time again.
+- The idle time is held in memory. Saving the setup restarts the module, so every
+  printer's idle time starts again then, which delays a switch off and never
+  brings one on early. Lowering the time does not switch off a printer that has
+  been idle for longer already.
+- A printer that reports no temperature is not switched off for being idle, since
+  whether it has cooled cannot be told. The log says so once.
+- A heater over its limit is switched off at once, even in the middle of a print.
+  If the printer is still on and still hot a minute later it is tried again. The
+  printer's own firmware stops a runaway heater first; this is a second layer,
+  so set the limits above any filament you print. The ranges keep a typo from
+  cutting a normal print.
+- Nothing is switched off while the printers cannot be read, and the log says so
+  once.
+- A plug switched off this way says why on its card, for as long as it stays off.
+  Each switch off is also a line in the log.
 
 The slots are fixed, not a list, because the manifest declares every host this
 module connects to under `egress`, and one egress entry names one option and so

@@ -2,12 +2,9 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"time"
-
-	"github.com/prusa3d/prusa-connect/sdk/deviceapi"
 )
 
 // busyStates are the printer states in which cutting the power ruins the print:
@@ -30,34 +27,18 @@ var printerState = func(context.Context, string) (state string, known bool, err 
 	return "", false, nil
 }
 
-// stateReader reads a printer's state through the host's device API, which the
-// module may use because it asked for `observe`.
-func stateReader(devices *deviceapi.Client) func(context.Context, string) (string, bool, error) {
+// stateReader answers a printer's state from the snapshots of every printer the
+// host knows.
+func stateReader(snapshots func(context.Context) (map[string]snapshot, error)) func(context.Context, string) (string, bool, error) {
 	return func(ctx context.Context, serial string) (string, bool, error) {
-		for offset := 0; ; {
-			page, err := devices.List(ctx, deviceapi.ListParams{Limit: deviceapi.MaxPageLimit, Offset: offset})
-			if err != nil {
-				return "", false, err
-			}
-
-			for _, device := range page.Items {
-				if device.Serial != serial {
-					continue
-				}
-
-				var state string
-				if json.Unmarshal(device.State[statePath], &state) != nil {
-					state = ""
-				}
-
-				return state, true, nil
-			}
-
-			offset += len(page.Items)
-			if len(page.Items) == 0 || offset >= page.Total {
-				return "", false, nil
-			}
+		found, err := snapshots(ctx)
+		if err != nil {
+			return "", false, err
 		}
+
+		snap, known := found[serial]
+
+		return snap.State, known, nil
 	}
 }
 

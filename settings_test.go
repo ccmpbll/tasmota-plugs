@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -147,5 +148,79 @@ func TestPriceAndCurrencyAreReadAndHeldToRules(t *testing.T) {
 	neg := -1.0
 	if err = (Settings{PricePerKWH: &neg}).validate(); err == nil {
 		t.Fatal("a negative price passed validate")
+	}
+}
+
+func TestAutomaticPowerOffIsOffUntilSet(t *testing.T) {
+	for _, body := range []string{`{}`, `{"auto_off_minutes":"","auto_off_cooldown_c":"","overheat_nozzle_c":"","overheat_bed_c":""}`, `{"auto_off_minutes":" 0 "}`} {
+		s, err := parse(t, body)
+		if err != nil {
+			t.Fatalf("%s: %v", body, err)
+		}
+
+		if s.Auto.IdleMinutes != 0 || s.Auto.OverheatNozzleC != 0 || s.Auto.OverheatBedC != 0 || s.Auto.cooldown() != 40 {
+			t.Fatalf("%s read as %+v, want everything off and a cooldown of 40", body, s.Auto)
+		}
+
+		if err := s.validate(); err != nil {
+			t.Fatalf("%s: %v", body, err)
+		}
+	}
+}
+
+func TestAutomaticPowerOffSettingsAreRead(t *testing.T) {
+	s, err := parse(t, `{"auto_off_minutes":"30","auto_off_cooldown_c":" 35 ","overheat_nozzle_c":"300","overheat_bed_c":"150"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want := (Auto{IdleMinutes: 30, CooldownC: 35, OverheatNozzleC: 300, OverheatBedC: 150}); s.Auto != want {
+		t.Fatalf("read %+v, want %+v", s.Auto, want)
+	}
+
+	if err := s.validate(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAutomaticPowerOffLimitsAreHeldToTheirRanges(t *testing.T) {
+	for key, bad := range map[string][]string{
+		"auto_off_minutes":    {"-1", "1441", "abc", "1.5", "30 min"},
+		"auto_off_cooldown_c": {"19", "101", "-5", "cold"},
+		"overheat_nozzle_c":   {"249", "501", "-1", "hot"},
+		"overheat_bed_c":      {"99", "201", "-1", "hot"},
+	} {
+		for _, value := range bad {
+			s, err := parse(t, fmt.Sprintf(`{%q:%q}`, key, value))
+			if err == nil {
+				err = s.validate()
+			}
+
+			if err == nil {
+				t.Fatalf("%s=%s was accepted", key, value)
+			}
+
+			if !strings.Contains(err.Error(), key) {
+				t.Fatalf("%s=%s was refused without naming the key: %v", key, value, err)
+			}
+		}
+	}
+
+	for key, ok := range map[string][]string{
+		"auto_off_minutes":    {"1", "1440"},
+		"auto_off_cooldown_c": {"20", "100"},
+		"overheat_nozzle_c":   {"250", "500"},
+		"overheat_bed_c":      {"100", "200"},
+	} {
+		for _, value := range ok {
+			s, err := parse(t, fmt.Sprintf(`{%q:%q}`, key, value))
+			if err == nil {
+				err = s.validate()
+			}
+
+			if err != nil {
+				t.Fatalf("%s=%s was refused: %v", key, value, err)
+			}
+		}
 	}
 }
