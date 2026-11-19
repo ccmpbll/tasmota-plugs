@@ -23,7 +23,7 @@
   const store = storeFor(host);
 
   // A printer in one of these states loses its print when its power goes.
-  const LOSES_A_PRINT = new Set(['PRINTING', 'PAUSED']);
+  const LOSES_A_PRINT = new Set(['PRINTING', 'PAUSED', 'ATTENTION']);
 
   const device = $derived(
     plug.printer
@@ -71,7 +71,7 @@
           printer: device?.name ?? plug.printer ?? plug.name,
         })}
         confirmLabel={t('smart-plugs.page.turn_off')}
-        onConfirm={() => void store.setPower(plug, false)}
+        onConfirm={() => void store.setPower(plug, false, true)}
       >
         {#snippet trigger({ props })}
           <Button {...props} size="sm" variant="destructive" disabled={busy}>

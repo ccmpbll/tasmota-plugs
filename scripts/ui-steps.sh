@@ -1,7 +1,7 @@
 #!/bin/sh
 # The build of the browser half: the two Prusa Connect library packages from
 # .core, the typed client for this module's routes, then the bundle itself
-# (format, lint, type check, build). It leaves ui/dist: module.yaml and ui/.
+# (format, lint, type check, tests, build). It leaves ui/dist: module.yaml and ui/.
 #
 # Needs Node 22 or newer with corepack (pnpm comes through it). It is run by
 # scripts/ui-build.sh inside a container, and directly by CI and by Prusa's

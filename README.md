@@ -7,8 +7,8 @@ An extension for [Prusa Connect](https://github.com/prusa3d/prusa-connect) (the
 self-hosted server) that is one Go process. It drives up to eight Tasmota
 smart plugs over HTTP, one or more per printer, shows what each one is drawing,
 and logs the print events of the printers the host lets it observe. It adds a
-Plugs page under Extensions in the app, where the plugs are also set up, and a
-Power line and section for each printer that has a plug. `make new-module` wrote the skeleton.
+Tasmota Plugs page under Extensions in the app, where the plugs are also set up, and a
+Tasmota line and tab for each printer that has a plug, and a dashboard card.
 
 Today it switches nothing by itself: each print event is only logged, with the
 plugs linked to its printer. Auto-off after a print and a thermal check are the
@@ -18,13 +18,13 @@ obvious next steps.
 | --- | --- |
 | `GET /plugs` | every plug, with its state and meter (`energy`, `signal_dbm`, `uptime_s`), and the price. A plug that does not answer is a row with `on: null` and an `error` |
 | `GET /plugs/{name}` | one plug, the same way |
-| `POST /plugs/{name}/power` | `{"on": true\|false}` switches it, and succeeds only when the plug answers 200 with the state asked for |
+| `POST /plugs/{name}/power` | `{"on": true\|false, "force"?: true}` switches it, and succeeds only when the plug answers 200 with the state asked for. Turning off is refused with `409 PRINTER_BUSY` while the printer is busy, unless `force` |
 
 All are under `/api/v1/modules/com.github.aux.ccmpbll.prusa-connect-tasmota/`.
 
 ## In the app
 
-**Set up plugs** is a button on the Plugs page (and a link on the page of any
+**Set up plugs** is a button on the Tasmota Plugs page (and a link on the page of any
 printer that has no plug yet). Each plug is a row: a name, an address, and a
 dropdown of the printers Connect knows. **+ Add a plug** adds one at a time, up to
 eight, and an optional electricity price per kWh turns the energy figures into
@@ -34,22 +34,31 @@ same rules the module holds the settings to), and Save stays off until it is
 valid. Connect also has its generic form for the same settings at Settings →
 Extensions → Smart plugs.
 
-**The Plugs page** has a card per plug: name, host, linked printer, state (On,
+**The Tasmota Plugs page** has a card per plug: name, host, linked printer, state (On,
 Off, or Not answering with the reason) and one button: Turn on when it is off,
 Turn off when it is on, both when it does not answer. Under it, what the plug's
-meter reports (when it has one): power draw now in watts, volts and amps, energy
-today, yesterday and in total (with the cost when a price is set), and the Wi-Fi
-signal. It refreshes every five seconds.
+meter reports (when it has one), as labelled figures: Power, Voltage and Current
+now, and Today, Yesterday and Total energy in kWh (with what it cost under each,
+when a price is set). It refreshes every five seconds.
 
 **On each printer that has a plug** (linked by serial): a line on its card in
-the Printers list, `Power: On · 14 W` (or each plug's name and state, and the
-total draw, when it has several), and a Power section at the foot of its Now tab
-with the same buttons. A printer with no plug shows neither, and offers a link to
-set one up once any plug exists.
+the Printers list, `Tasmota: On · 14 W` (or each plug's name and state, and the
+total draw, when it has several), and a **Tasmota** tab on its page, in the tab
+bar beside Now, Controls and Files, with the same cards and buttons. A printer
+with no plug gets the tab too, with a link to set one up.
 
-When the linked printer is printing or paused, Turn off asks first, since cutting
-its power ruins the print. Whether an account may switch plugs or change the setup
-is the host's call: a refusal shows its reason.
+**A dashboard card**, *Tasmota plugs*, can be added to any dashboard (Edit, Add a card): a row per plug with its state, what it is drawing and the same Turn on / Turn off button. Its one setting narrows it to the plugs of chosen printers; with none chosen it shows them all. The buttons are inert while the dashboard is being edited.
+
+**Turning a printer off while it prints is guarded twice.** The app asks first when
+the linked printer is printing, paused or waiting for a person ("Cutting its power
+will ruin the print"). And the module itself refuses: `POST /plugs/{name}/power`
+with `{"on": false}` answers `409 PRINTER_BUSY` in those states, whoever calls it,
+unless the request carries `"force": true`, which the app sends only after you
+confirm. Turning a plug on is never held up, nor is a plug with no printer linked,
+nor a printer the server does not know (offline or frozen: the plug may be the only
+way to restart it). If the module cannot read the printer's state, it does not
+block the switch, and says so in its log. Whether an account may switch plugs or
+change the setup is the host's call: a refusal shows its reason.
 
 The page is Svelte, built with Connect's component library in a Node container,
 so nothing is installed on your machine:
@@ -80,7 +89,7 @@ answers on is built from it.
 | `follower.go` | subscribes to `device.job.started` and `device.job.settled` and logs each, resuming from the last cursor |
 | `faults.go` | every code this module refuses with, each documented once |
 | `*_test.go` | the client's refusals, the settings, the routes and their codes, the follower's resume and printer match, and the manifest parsed by the SDK |
-| `ui/`, `client/` | the Plugs page (Svelte) and the generated typed client for the routes |
+| `ui/`, `client/` | the Tasmota Plugs page (Svelte) and the generated typed client for the routes |
 | `.github/workflows/` | `ci.yml` (Go checks and the browser build) and `release.yml` (publishes to the marketplace when a GitHub release is published) |
 | `scripts/` | `ui-steps.sh` (the browser build, native), `simprinter/` (a stand-in printer for testing the printer pages), `ui-build.sh` (the page, in a container), `make-kit.sh` and `install-on-host.sh` (install into a Docker host), `bundle.sh` and `release.sh` (builds), `demo.sh` and `fake-tasmota.py` (try it locally) |
 | `openapi.json` | the fragment describing the routes, with every path relative to the mount |
@@ -154,7 +163,7 @@ These are what the in-app setup edits. Up to eight plugs, each three keys,
 | key | meaning |
 | --- | --- |
 | `plug<N>_host` | the Tasmota plug's host name or IPv4 address, no port. Empty leaves the slot unused |
-| `plug<N>_name` | the name its routes use: lower-case letters, digits and hyphens, at most 32. Empty names it `plug<N>` |
+| `plug<N>_name` | the name shown for it, such as `Core One`: up to 40 characters, without `/ ? # %`, and two names may not differ only by capitals. Empty names it `plug<N>` |
 | `plug<N>_printer` | the serial of the printer it powers, as Connect shows it. Empty links no printer. Several plugs may share a printer |
 
 ```yaml
@@ -235,7 +244,7 @@ Build a kit on your own machine, copy it to the Docker host, and run the script
 there. The script needs only `sh`, `docker` and coreutils.
 
 ```bash
-sh scripts/ui-build.sh                       # the Plugs page, built in a Node container (once, and after UI changes)
+sh scripts/ui-build.sh                       # the Tasmota Plugs page, built in a Node container (once, and after UI changes)
 sh scripts/make-kit.sh                       # kit/: install.sh, the linux_amd64 build and SHA256SUMS
 scp -r kit root@<host>:/tmp/
 ```
@@ -246,7 +255,7 @@ On the host:
 sh /tmp/kit/install.sh prusa-connect
 ```
 
-Then open the Plugs page and use **Set up plugs**. To set the plugs from the
+Then open the Tasmota Plugs page and use **Set up plugs**. To set the plugs from the
 command line instead, name them (and the printer serial each one powers):
 
 ```bash

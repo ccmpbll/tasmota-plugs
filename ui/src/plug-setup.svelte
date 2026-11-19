@@ -14,6 +14,7 @@
     SelectValue,
   } from '@prusa/connect-ui/primitives';
 
+  import { showApplying } from './applying';
   import { heldHost } from './host';
   import { storeFor } from './store.svelte';
 
@@ -42,7 +43,15 @@
 
   // The same rules the module holds the settings to at start, so a mistake is
   // found here and not as a refused start.
-  const NAME = /^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/;
+  const MAX_NAME = 40;
+  // eslint-disable-next-line no-control-regex -- control characters are what it refuses
+  const NAME_BAD = /[/\\?#%\u0000-\u001f\u007f-\u009f]/;
+  const nameOk = (name: string): boolean =>
+    Array.from(name).length >= 1 &&
+    Array.from(name).length <= MAX_NAME &&
+    name === name.trim() &&
+    !/^\.+$/.test(name) &&
+    !NAME_BAD.test(name);
   const LABEL = '[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?';
   const HOST = new RegExp(`^${LABEL}(\\.${LABEL})*$`);
 
@@ -169,10 +178,12 @@
     rows.map((row, index) => {
       const name = effectiveName(row, index);
       const duplicate = rows.some(
-        (other, at) => at !== index && effectiveName(other, at) === name,
+        (other, at) =>
+          at !== index &&
+          effectiveName(other, at).toLowerCase() === name.toLowerCase(),
       );
       let nameProblem: string | undefined;
-      if (!NAME.test(name)) nameProblem = t('smart-plugs.setup.error.name');
+      if (!nameOk(name)) nameProblem = t('smart-plugs.setup.error.name');
       else if (duplicate)
         nameProblem = t('smart-plugs.setup.error.duplicate', { name });
 
@@ -251,9 +262,13 @@
         },
         host.signal,
       );
-      // The module restarts to take the new settings, so the first reads may
-      // fail; the page's own refresh picks it up in a moment.
-      await store.refresh();
+      // The module restarts to take the new settings. Close at once and let
+      // the store wait for it quietly, with the page saying so meanwhile.
+      showApplying(
+        t('smart-plugs.applying.title'),
+        t('smart-plugs.applying.detail'),
+      );
+      void store.settle(rows.map((row, index) => effectiveName(row, index)));
       onclose();
     } catch (error) {
       if (!host.signal.aborted)
