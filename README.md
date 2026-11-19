@@ -219,8 +219,11 @@ on what it does:
   cutting a normal print.
 - Nothing is switched off while the printers cannot be read, and the log says so
   once.
-- A plug switched off this way says why on its card, for as long as it stays off.
-  Each switch off is also a line in the log.
+- A plug switched off this way says why on its card, until it is switched on
+  again by anyone. Each switch off is also a line in the log.
+- If an idle printer's plug cannot be reached, the module waits five minutes
+  before it tries again, so a wrong address does not fill the log. An overheat
+  cut is tried again at every look.
 
 The slots are fixed, not a list, because the manifest declares every host this
 module connects to under `egress`, and one egress entry names one option and so

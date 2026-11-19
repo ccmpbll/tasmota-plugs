@@ -23,6 +23,9 @@ const (
 	tripRetry = time.Minute
 	// cutTimeout bounds one plug's switch off.
 	cutTimeout = 8 * time.Second
+	// idleRetry is how long an idle printer is left alone after its plug could not
+	// be switched off. An overheat cut is not held back like this.
+	idleRetry = 5 * time.Minute
 
 	stateOffline = "OFFLINE"
 
@@ -58,6 +61,10 @@ func snapshotOf(tree map[string]json.RawMessage) snapshot {
 	_ = json.Unmarshal(tree[statePath], &snap.State)
 
 	for path, raw := range tree {
+		if path != bedPath && !nozzlePath.MatchString(path) {
+			continue
+		}
+
 		// A pointer, so a null is no reading and not zero degrees: a printer must
 		// never look cool because it said nothing.
 		var degrees *float64
@@ -65,13 +72,10 @@ func snapshotOf(tree map[string]json.RawMessage) snapshot {
 			continue
 		}
 
-		switch {
-		case path == bedPath:
+		if path == bedPath {
 			snap.Bed = degrees
-		case nozzlePath.MatchString(path):
-			if snap.Nozzle == nil || *degrees > *snap.Nozzle {
-				snap.Nozzle = degrees
-			}
+		} else if snap.Nozzle == nil || *degrees > *snap.Nozzle {
+			snap.Nozzle = degrees
 		}
 	}
 
@@ -113,9 +117,11 @@ type autoEvent struct {
 
 // streak is how long a printer has been idle, and whether it was cut for it.
 type streak struct {
-	since  time.Time
-	done   bool
-	warned bool
+	since time.Time
+	// retryAt is when a cut that failed may be tried again.
+	retryAt time.Time
+	done    bool
+	warned  bool
 }
 
 // trip is a cut made for overheating, kept until the printer shows that it took
@@ -186,6 +192,14 @@ func (w *watcher) Run(ctx context.Context) {
 		case <-ticker.C:
 		}
 	}
+}
+
+// forget ends the reason a plug was switched off.
+func (w *watcher) forget(plug string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	delete(w.events, plug)
 }
 
 // last is why the plug was last switched off by the module, if it was.
@@ -320,7 +334,7 @@ func (w *watcher) idle(ctx context.Context, a Auto, serial string, snap snapshot
 		return
 	}
 
-	if s.done || now.Sub(s.since) < time.Duration(a.IdleMinutes)*time.Minute {
+	if s.done || now.Before(s.retryAt) || now.Sub(s.since) < time.Duration(a.IdleMinutes)*time.Minute {
 		return
 	}
 
@@ -343,6 +357,8 @@ func (w *watcher) idle(ctx context.Context, a Auto, serial string, snap snapshot
 
 	if w.cutAll(ctx, plugs, reasonIdle, fmt.Sprintf("the printer was idle for %d min and had cooled", a.IdleMinutes)) {
 		s.done = true
+	} else {
+		s.retryAt = now.Add(idleRetry)
 	}
 }
 

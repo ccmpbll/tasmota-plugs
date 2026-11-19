@@ -227,18 +227,25 @@ func TestAPrinterWithOnlyABedTemperatureIsJudgedOnThat(t *testing.T) {
 	r.cut("core-one")
 }
 
-func TestACutThatFailsIsTriedAgainAndThenNotRepeated(t *testing.T) {
+func TestAnIdleCutThatFailsWaitsFiveMinutesAndIsThenTriedAgain(t *testing.T) {
 	r := newRig(t, Auto{IdleMinutes: 1}, coreOne)
 	r.snaps["CZPX-1"] = cool("IDLE")
 	r.cutErr["core-one"] = errors.New("plug unreachable")
 
 	r.look(0)
-	r.look(time.Minute)
-	r.look(10 * time.Second)
-	r.cut()
+	r.look(time.Minute) // the first try fails
+
+	// Looking every ten seconds, it does not try or say anything again.
+	for range 29 {
+		r.look(10 * time.Second)
+	}
+
+	if len(r.logs) != 1 {
+		t.Fatalf("a failing plug was reported %d times in five minutes: %v", len(r.logs), r.logs)
+	}
 
 	delete(r.cutErr, "core-one")
-	r.look(10 * time.Second)
+	r.look(10 * time.Second) // five minutes since the failure
 	r.cut("core-one")
 
 	r.look(10 * time.Second)
@@ -584,5 +591,63 @@ func TestThePrintersAreNotReadWhenNoPlugIsLinkedToOne(t *testing.T) {
 
 	if asked != 0 {
 		t.Fatalf("the printers were read %d times for plugs that power none", asked)
+	}
+}
+
+func TestAReasonEndsWhenAPlugIsSeenOnOrSwitchedByAPerson(t *testing.T) {
+	plugs := []plugConfig{coreOne}
+	withSettings(t, Settings{Plugs: plugs})
+	states := withFakePlugs(t, plugs...)
+
+	r := newRig(t, Auto{IdleMinutes: 1}, coreOne)
+	r.snaps["CZPX-1"] = cool("IDLE")
+	r.look(0)
+	r.look(time.Minute)
+
+	old := auto
+	auto = r.w
+
+	t.Cleanup(func() { auto = old })
+
+	shown := func() bool {
+		var v plugView
+		if err := json.Unmarshal(do(http.MethodGet, "/plugs/core-one", "").Body.Bytes(), &v); err != nil {
+			t.Fatal(err)
+		}
+
+		return v.AutoOff != nil
+	}
+
+	// Seen on, then off again by someone: the old reason is not shown.
+	*states["core.lan"] = "OFF"
+	if !shown() {
+		t.Fatal("the reason is not shown for a plug the module switched off")
+	}
+
+	*states["core.lan"] = "ON"
+	shown()
+
+	*states["core.lan"] = "OFF"
+	if shown() {
+		t.Fatal("a plug switched on and off again by a person still shows the module's reason")
+	}
+
+	// Switched through the route, with nobody reading it in between.
+	r.snaps["CZPX-1"] = cool("PRINTING")
+	r.look(time.Second)
+	r.snaps["CZPX-1"] = cool("IDLE")
+	r.look(time.Second)
+	r.look(time.Minute)
+
+	*states["core.lan"] = "OFF"
+	if !shown() {
+		t.Fatal("the second cut was not remembered")
+	}
+
+	do(http.MethodPost, "/plugs/core-one/power", `{"on":true}`)
+	do(http.MethodPost, "/plugs/core-one/power", `{"on":false,"force":true}`)
+
+	if shown() {
+		t.Fatal("a plug switched by a person through the route still shows the module's reason")
 	}
 }

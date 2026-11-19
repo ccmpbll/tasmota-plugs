@@ -105,14 +105,13 @@ func (a Auto) validate() error {
 		key       string
 		value     int
 		low, high int
-		zeroOK    bool
 	}{
-		{"auto_off_minutes", a.IdleMinutes, 1, maxIdleMinutes, true},
-		{"auto_off_cooldown_c", a.CooldownC, minCooldownC, maxCooldownC, true},
-		{"overheat_nozzle_c", a.OverheatNozzleC, minOverheatNozzle, maxOverheatNozzle, true},
-		{"overheat_bed_c", a.OverheatBedC, minOverheatBed, maxOverheatBed, true},
+		{"auto_off_minutes", a.IdleMinutes, 1, maxIdleMinutes},
+		{"auto_off_cooldown_c", a.CooldownC, minCooldownC, maxCooldownC},
+		{"overheat_nozzle_c", a.OverheatNozzleC, minOverheatNozzle, maxOverheatNozzle},
+		{"overheat_bed_c", a.OverheatBedC, minOverheatBed, maxOverheatBed},
 	} {
-		if limit.value == 0 && limit.zeroOK {
+		if limit.value == 0 {
 			continue
 		}
 

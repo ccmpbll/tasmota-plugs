@@ -278,6 +278,12 @@ func routes() http.Handler {
 			return
 		}
 
+		// A person has switched it now, so what the module did to it before is no
+		// longer why it is as it is.
+		if auto != nil {
+			auto.forget(config.Name)
+		}
+
 		answer(w, http.StatusOK, plugView{Name: config.Name, Host: config.Host, Printer: config.Printer, On: body.On})
 	})
 
@@ -317,8 +323,14 @@ func viewOf(config plugConfig, r Reading) plugView {
 		Energy: r.Energy, SignalDBm: r.SignalDBm, UptimeSeconds: r.UptimeSeconds,
 	}
 
-	if auto != nil && !r.On {
-		view.AutoOff = auto.last(config.Name)
+	// Why it was switched off is shown only while it stays off. A plug seen on
+	// has been switched back on, by a person or at the plug, and its reason ends.
+	if auto != nil {
+		if r.On {
+			auto.forget(config.Name)
+		} else {
+			view.AutoOff = auto.last(config.Name)
+		}
 	}
 
 	return view
