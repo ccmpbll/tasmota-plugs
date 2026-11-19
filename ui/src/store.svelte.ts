@@ -19,6 +19,52 @@ const MISSES_BEFORE_FAILURE = 3;
 const SETTLE_MS = 1000;
 const SETTLE_TRIES = 20;
 
+// Connect takes the page down while the extension restarts and puts a new one
+// up after, so what a save started is carried across in the tab's own storage:
+// the plugs that were saved, and when.
+const PENDING_KEY = 'smart-plugs.pending';
+const PENDING_FOR_MS = 120_000;
+
+const rememberSave = (names: readonly string[]): void => {
+  try {
+    sessionStorage.setItem(
+      PENDING_KEY,
+      JSON.stringify({ names, at: Date.now() }),
+    );
+  } catch {
+    // No storage: the page just comes back without the note.
+  }
+};
+
+const forgetSave = (): void => {
+  try {
+    sessionStorage.removeItem(PENDING_KEY);
+  } catch {
+    // Nothing was kept.
+  }
+};
+
+const savedNames = (): string[] | undefined => {
+  try {
+    const kept: unknown = JSON.parse(
+      sessionStorage.getItem(PENDING_KEY) ?? 'null',
+    );
+    if (typeof kept !== 'object' || kept === null) return undefined;
+    const { names, at } = kept as { names?: unknown; at?: unknown };
+    if (
+      !Array.isArray(names) ||
+      !names.every((n): n is string => typeof n === 'string') ||
+      typeof at !== 'number' ||
+      Date.now() - at > PENDING_FOR_MS
+    )
+      return undefined;
+
+    return names;
+  } catch {
+    return undefined;
+  }
+};
+
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -57,7 +103,9 @@ export class PlugStore {
   use(): () => void {
     this.#users += 1;
     if (this.#users === 1) {
-      void this.refresh();
+      const saved = savedNames();
+      if (saved) void this.settle(saved, false);
+      else void this.refresh();
       this.#timer = setInterval(() => void this.refresh(), REFRESH_MS);
     }
 
@@ -97,15 +145,18 @@ export class PlugStore {
 
   /**
    * Called after settings are saved: the module restarts to take them, so read
-   * quietly until it answers with the plugs that were saved.
+   * quietly until it answers with the plugs that were saved. `fresh` is true
+   * for the save just made, which is also kept so the page that Connect puts up
+   * after the restart carries on.
    */
-  async settle(names: readonly string[]): Promise<void> {
+  async settle(names: readonly string[], fresh = true): Promise<void> {
+    if (fresh) rememberSave(names);
     this.applying = true;
     const want = [...names].sort().join('\n');
 
     try {
       for (let tries = 0; tries < SETTLE_TRIES; tries += 1) {
-        await sleep(SETTLE_MS);
+        if (tries > 0 || fresh) await sleep(SETTLE_MS);
         if (this.#signal.aborted) return;
         try {
           const list = await this.#service.list(this.#signal);
@@ -120,6 +171,8 @@ export class PlugStore {
             this.currency = list.currency;
             this.failure = undefined;
             this.#misses = 0;
+            this.loaded = true;
+            forgetSave();
 
             return;
           }
@@ -131,6 +184,7 @@ export class PlugStore {
       this.applying = false;
     }
 
+    forgetSave();
     await this.refresh();
   }
 
