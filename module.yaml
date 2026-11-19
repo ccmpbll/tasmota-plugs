@@ -1,0 +1,231 @@
+# The manifest for smart-plugs, a module that is the Go process in main.go and
+# nothing else. There is no ui block, so it draws nothing in the app. It drives
+# up to eight Tasmota plugs over HTTP, one or more per printer, adds a Plugs
+# page to the app, and logs the print events of the printers the host lets it
+# observe.
+#
+# `prusa-connect module add` reads it out of the release and writes one
+# declaration from it.
+#
+# The namespace is absent on purpose. The host derives it from the repository
+# address the operator installed, so no module can name another module's
+# address. For this module that is com.github.aux.ccmpbll.prusa-connect-tasmota.
+
+name: smart-plugs
+# The kind the one instance is declared under. It offers the service runtime,
+# which is what a module with a process needs.
+kind: sink
+version: 0.1.0
+# The licence this module is released under. The marketplace shows it and
+# refuses a release without one. An SPDX identifier is the usual form.
+license: MIT
+# What a marketplace card prints beside the name: the title a person reads,
+# one sentence about this module, and who answers for it. The install copies
+# them into the declaration, so `GET /api/v1/resources` carries them for an
+# installed module. Write your own sentence here, a title if the name alone reads badly, and your name or
+# your team's beside it.
+# title: Your module's name
+title: Tasmota plugs
+summary: Switches Tasmota smart plugs, one or more per printer, from a Plugs page, and follows print events.
+codeowner: ccmpbll
+# The module wire major the process half speaks.
+contract_major: 1
+# Where the fragment describing the routes is, inside this repository.
+openapi: openapi.json
+# The platforms the release ships a binary for, each a GOOS_GOARCH pair. Drop
+# the ones you do not build, and add the ones you do.
+platforms:
+  - linux_amd64
+  - linux_arm64
+  - darwin_arm64
+  - windows_amd64
+
+# Every setting this module reads, each with its type, its default and one
+# sentence saying what it controls. The host applies every default, writes the
+# `config:` block of the instance over it key by key, and sends the result on
+# plugin.configure before the first request arrives. A key not named here is
+# refused before the process starts, and nothing in main.go reads an
+# environment variable, so this list is where an operator finds every knob.
+#
+# An operator who wants another line writes:
+#
+#   resources:
+#     sink:
+#       smart-plugs:
+#         config:
+#           plug1_name: core-one
+#           plug1_host: 192.168.1.30
+#           plug1_printer: CZPX1234X009XC12345
+options:
+  - key: plug1_name
+    type: string
+    default: ""
+    summary: "Plug 1: the name its routes use, such as core-one. Lower-case letters, digits and hyphens. Empty names it plug1."
+  - key: plug1_host
+    type: string
+    default: ""
+    summary: "Plug 1: the Tasmota plug's host name or IPv4 address, with no port. Empty leaves the slot unused."
+  - key: plug1_printer
+    type: string
+    default: ""
+    summary: "Plug 1: the serial of the printer it powers, as the printer's page shows it. Empty links no printer."
+  - key: plug2_name
+    type: string
+    default: ""
+    summary: "Plug 2: the name its routes use, such as core-one. Lower-case letters, digits and hyphens. Empty names it plug2."
+  - key: plug2_host
+    type: string
+    default: ""
+    summary: "Plug 2: the Tasmota plug's host name or IPv4 address, with no port. Empty leaves the slot unused."
+  - key: plug2_printer
+    type: string
+    default: ""
+    summary: "Plug 2: the serial of the printer it powers, as the printer's page shows it. Empty links no printer."
+  - key: plug3_name
+    type: string
+    default: ""
+    summary: "Plug 3: the name its routes use, such as core-one. Lower-case letters, digits and hyphens. Empty names it plug3."
+  - key: plug3_host
+    type: string
+    default: ""
+    summary: "Plug 3: the Tasmota plug's host name or IPv4 address, with no port. Empty leaves the slot unused."
+  - key: plug3_printer
+    type: string
+    default: ""
+    summary: "Plug 3: the serial of the printer it powers, as the printer's page shows it. Empty links no printer."
+  - key: plug4_name
+    type: string
+    default: ""
+    summary: "Plug 4: the name its routes use, such as core-one. Lower-case letters, digits and hyphens. Empty names it plug4."
+  - key: plug4_host
+    type: string
+    default: ""
+    summary: "Plug 4: the Tasmota plug's host name or IPv4 address, with no port. Empty leaves the slot unused."
+  - key: plug4_printer
+    type: string
+    default: ""
+    summary: "Plug 4: the serial of the printer it powers, as the printer's page shows it. Empty links no printer."
+  - key: plug5_name
+    type: string
+    default: ""
+    summary: "Plug 5: the name its routes use, such as core-one. Lower-case letters, digits and hyphens. Empty names it plug5."
+  - key: plug5_host
+    type: string
+    default: ""
+    summary: "Plug 5: the Tasmota plug's host name or IPv4 address, with no port. Empty leaves the slot unused."
+  - key: plug5_printer
+    type: string
+    default: ""
+    summary: "Plug 5: the serial of the printer it powers, as the printer's page shows it. Empty links no printer."
+  - key: plug6_name
+    type: string
+    default: ""
+    summary: "Plug 6: the name its routes use, such as core-one. Lower-case letters, digits and hyphens. Empty names it plug6."
+  - key: plug6_host
+    type: string
+    default: ""
+    summary: "Plug 6: the Tasmota plug's host name or IPv4 address, with no port. Empty leaves the slot unused."
+  - key: plug6_printer
+    type: string
+    default: ""
+    summary: "Plug 6: the serial of the printer it powers, as the printer's page shows it. Empty links no printer."
+  - key: plug7_name
+    type: string
+    default: ""
+    summary: "Plug 7: the name its routes use, such as core-one. Lower-case letters, digits and hyphens. Empty names it plug7."
+  - key: plug7_host
+    type: string
+    default: ""
+    summary: "Plug 7: the Tasmota plug's host name or IPv4 address, with no port. Empty leaves the slot unused."
+  - key: plug7_printer
+    type: string
+    default: ""
+    summary: "Plug 7: the serial of the printer it powers, as the printer's page shows it. Empty links no printer."
+  - key: plug8_name
+    type: string
+    default: ""
+    summary: "Plug 8: the name its routes use, such as core-one. Lower-case letters, digits and hyphens. Empty names it plug8."
+  - key: plug8_host
+    type: string
+    default: ""
+    summary: "Plug 8: the Tasmota plug's host name or IPv4 address, with no port. Empty leaves the slot unused."
+  - key: plug8_printer
+    type: string
+    default: ""
+    summary: "Plug 8: the serial of the printer it powers, as the printer's page shows it. Empty links no printer."
+  - key: price_per_kwh
+    type: string
+    default: ""
+    summary: "What a kilowatt-hour costs, such as 0.14, so the energy a plug used can be shown as money. Empty shows no cost."
+  - key: currency
+    type: string
+    default: "$"
+    summary: "What the price is written in, such as $, EUR or kr. One to eight characters."
+
+# Every connection this module makes outside Prusa Connect, one per plug host.
+# The operator reads them before approving the install. A plug needs its own
+# entry because an egress entry names one option, and so one host.
+egress:
+  - option: plug1_host
+    ports: [80]
+    why: "Plug 1: reads the plug's relay state and switches it, over Tasmota's HTTP command interface."
+    sends: Only Power, Power On and Power Off commands.
+  - option: plug2_host
+    ports: [80]
+    why: "Plug 2: reads the plug's relay state and switches it, over Tasmota's HTTP command interface."
+    sends: Only Power, Power On and Power Off commands.
+  - option: plug3_host
+    ports: [80]
+    why: "Plug 3: reads the plug's relay state and switches it, over Tasmota's HTTP command interface."
+    sends: Only Power, Power On and Power Off commands.
+  - option: plug4_host
+    ports: [80]
+    why: "Plug 4: reads the plug's relay state and switches it, over Tasmota's HTTP command interface."
+    sends: Only Power, Power On and Power Off commands.
+  - option: plug5_host
+    ports: [80]
+    why: "Plug 5: reads the plug's relay state and switches it, over Tasmota's HTTP command interface."
+    sends: Only Power, Power On and Power Off commands.
+  - option: plug6_host
+    ports: [80]
+    why: "Plug 6: reads the plug's relay state and switches it, over Tasmota's HTTP command interface."
+    sends: Only Power, Power On and Power Off commands.
+  - option: plug7_host
+    ports: [80]
+    why: "Plug 7: reads the plug's relay state and switches it, over Tasmota's HTTP command interface."
+    sends: Only Power, Power On and Power Off commands.
+  - option: plug8_host
+    ports: [80]
+    why: "Plug 8: reads the plug's relay state and switches it, over Tasmota's HTTP command interface."
+    sends: Only Power, Power On and Power Off commands.
+
+# The memory in MiB the server may budget for the process, children included.
+# needs:
+#   memory_mib: 256
+
+# Read the print events of every printer, so the module can log when a job
+# starts and settles.
+permissions:
+  - observe
+
+# The browser half: a Plugs page in the app's sidebar, a line and a section for
+# each printer that has a plug, built by `sh scripts/ui-build.sh`
+# into ui/dist. The page lists the plugs and switches each one through this
+# module's own routes.
+ui:
+  # The built bundle's entry, relative to the bundle root.
+  entry: ui/index.js
+  # The range of @prusa/connect-ui this bundle was built against.
+  library: ">=0.1.0 <1.0.0"
+  contributes:
+    pages:
+      - path: smart-plugs
+        title: Plugs
+    # A line on each printer's card in the list, and a section on its own page,
+    # for the printers that have a plug linked to them by serial.
+    device_card:
+      - id: smart-plugs
+        title: Power
+    device_section:
+      - id: smart-plugs
+        title: Power
