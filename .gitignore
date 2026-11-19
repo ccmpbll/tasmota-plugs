@@ -1,0 +1,15 @@
+
+# A checkout of prusa3d/prusa-connect the sdk is built from (see go.mod).
+# What a build writes. It is made again from the files beside it, so it is
+# never committed.
+.DS_Store
+.pnpm-store/
+/.core/
+/client/dist/
+/client/node_modules/
+/prusa-connect-tasmota
+/dist/
+/kit/
+/smart-plugs-*.tar.gz
+/ui/dist/
+/ui/node_modules/

@@ -1,0 +1,25 @@
+name: Publish to Plugin Marketplace
+
+# Runs when a GitHub release is published. Prusa's reusable workflow builds the
+# release from this commit, signs it and submits it for review. See the README,
+# "Publishing to the marketplace", for the one-time setup it needs.
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    uses: prusa3d/prusa-connect-marketplace-publish/.github/workflows/publish.yml@v1
+    with:
+      path: .
+      # What builds ui/dist. It runs on the runner, which has Node and Go.
+      bundle-command: LOCKED=1 sh scripts/ui-steps.sh
+      # Prusa Connect into .core/ (the SDK is not published yet): the release this
+      # was built and tested against, the same one .core-version pins.
+      core-ref: v0.1.0-beta.1
+    secrets:
+      PRUSA_CONNECT_EXTENSION_SIGNING_KEY: ${{ secrets.PRUSA_CONNECT_EXTENSION_SIGNING_KEY }}
+    permissions:
+      contents: read
+      id-token: write # lets the run prove which repository, workflow and builder it is
+      attestations: write # the build provenance of the archive and every binary

@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: Go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Prusa Connect source (the SDK)
+        run: sh scripts/setup.sh
+      - name: gofmt
+        run: test -z "$(gofmt -l *.go)"
+      - run: go vet ./...
+      - run: go test ./...
+      - name: Builds as Prusa's builder builds it
+        run: CGO_ENABLED=0 GOFLAGS=-mod=readonly go build -trimpath -o /dev/null .
+
+  ui:
+    name: Browser half
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: corepack enable
+      - name: Prusa Connect source (the SDK and the component library)
+        run: sh scripts/setup.sh
+      - name: Lint, type check and build
+        run: LOCKED=1 sh scripts/ui-steps.sh

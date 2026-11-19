@@ -1,0 +1,347 @@
+{
+  "info": {
+    "title": "smart-plugs",
+    "version": "0.1.0",
+    "description": "The routes smart-plugs serves. Every path is relative to the mount the host assigns, and the host serves this document rebased under it at \u003cmount\u003e/openapi.json."
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/modules/com.github.aux.ccmpbll.prusa-connect-tasmota/plugs": {
+      "get": {
+        "operationId": "list-plugs",
+        "summary": "Every configured plug and whether it is on",
+        "description": "Asks every plug for its state and energy meter at once, with one request each. A plug that does not answer is a row with `on` null and an `error`, so one dead plug does not hide the others. The host takes view_resource on the module's instance before this is called.",
+        "responses": {
+          "200": {
+            "description": "The plugs, in slot order.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "description": "The plug's name, as its routes use it."
+                          },
+                          "host": {
+                            "type": "string",
+                            "description": "The plug's host."
+                          },
+                          "printer": {
+                            "type": "string",
+                            "description": "The serial of the printer it powers. Absent when none is linked."
+                          },
+                          "on": {
+                            "type": [
+                              "boolean",
+                              "null"
+                            ],
+                            "description": "Whether the relay is on, or null when the plug could not be read."
+                          },
+                          "error": {
+                            "type": "string",
+                            "description": "Why the plug could not be read. Present only in the list."
+                          },
+                          "energy": {
+                            "type": "object",
+                            "description": "The plug's energy meter. Each field is absent when the plug does not send it.",
+                            "properties": {
+                              "watts": {
+                                "type": "number",
+                                "description": "Power draw now, in watts."
+                              },
+                              "volts": {
+                                "type": "number"
+                              },
+                              "amps": {
+                                "type": "number"
+                              },
+                              "power_factor": {
+                                "type": "number"
+                              },
+                              "today_kwh": {
+                                "type": "number"
+                              },
+                              "yesterday_kwh": {
+                                "type": "number"
+                              },
+                              "total_kwh": {
+                                "type": "number",
+                                "description": "The meter's running total, in kilowatt-hours."
+                              }
+                            }
+                          },
+                          "signal_dbm": {
+                            "type": "integer",
+                            "description": "The plug's Wi-Fi signal strength in dBm."
+                          },
+                          "uptime_s": {
+                            "type": "integer",
+                            "description": "How long the plug has been up, in seconds."
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "host",
+                          "on"
+                        ]
+                      }
+                    },
+                    "price_per_kwh": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "description": "What a kilowatt-hour costs, or null when no price is set."
+                    },
+                    "currency": {
+                      "type": "string",
+                      "description": "What the price is written in."
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "currency"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/com.github.aux.ccmpbll.prusa-connect-tasmota/plugs/{name}": {
+      "get": {
+        "operationId": "read-plug",
+        "summary": "One plug's state",
+        "description": "Asks the named plug for its relay state. The host takes view_resource on the module's instance before this is called.",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The plug's name from plug\u003cN\u003e_name, or plug\u003cN\u003e when none was set."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The plug.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "The plug's name, as its routes use it."
+                    },
+                    "host": {
+                      "type": "string",
+                      "description": "The plug's host."
+                    },
+                    "printer": {
+                      "type": "string",
+                      "description": "The serial of the printer it powers. Absent when none is linked."
+                    },
+                    "on": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ],
+                      "description": "Whether the relay is on, or null when the plug could not be read."
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Why the plug could not be read. Present only in the list."
+                    },
+                    "energy": {
+                      "type": "object",
+                      "description": "The plug's energy meter. Each field is absent when the plug does not send it.",
+                      "properties": {
+                        "watts": {
+                          "type": "number",
+                          "description": "Power draw now, in watts."
+                        },
+                        "volts": {
+                          "type": "number"
+                        },
+                        "amps": {
+                          "type": "number"
+                        },
+                        "power_factor": {
+                          "type": "number"
+                        },
+                        "today_kwh": {
+                          "type": "number"
+                        },
+                        "yesterday_kwh": {
+                          "type": "number"
+                        },
+                        "total_kwh": {
+                          "type": "number",
+                          "description": "The meter's running total, in kilowatt-hours."
+                        }
+                      }
+                    },
+                    "signal_dbm": {
+                      "type": "integer",
+                      "description": "The plug's Wi-Fi signal strength in dBm."
+                    },
+                    "uptime_s": {
+                      "type": "integer",
+                      "description": "How long the plug has been up, in seconds."
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "host",
+                    "on"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No plug has that name (PLUG_NOT_FOUND)."
+          },
+          "502": {
+            "description": "The plug did not answer correctly (PLUG_UNREACHABLE)."
+          }
+        }
+      }
+    },
+    "/api/v1/modules/com.github.aux.ccmpbll.prusa-connect-tasmota/plugs/{name}/power": {
+      "post": {
+        "operationId": "set-plug-power",
+        "summary": "Switch one plug",
+        "description": "Sends Power On or Power Off to the named plug and reports success only when the plug answers 200 with the state that was asked for. The host takes operate_resource on the module's instance before this is called.",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The plug's name from plug\u003cN\u003e_name, or plug\u003cN\u003e when none was set."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "on": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "on"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The plug is in the requested state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "The plug's name, as its routes use it."
+                    },
+                    "host": {
+                      "type": "string",
+                      "description": "The plug's host."
+                    },
+                    "printer": {
+                      "type": "string",
+                      "description": "The serial of the printer it powers. Absent when none is linked."
+                    },
+                    "on": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ],
+                      "description": "Whether the relay is on, or null when the plug could not be read."
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Why the plug could not be read. Present only in the list."
+                    },
+                    "energy": {
+                      "type": "object",
+                      "description": "The plug's energy meter. Each field is absent when the plug does not send it.",
+                      "properties": {
+                        "watts": {
+                          "type": "number",
+                          "description": "Power draw now, in watts."
+                        },
+                        "volts": {
+                          "type": "number"
+                        },
+                        "amps": {
+                          "type": "number"
+                        },
+                        "power_factor": {
+                          "type": "number"
+                        },
+                        "today_kwh": {
+                          "type": "number"
+                        },
+                        "yesterday_kwh": {
+                          "type": "number"
+                        },
+                        "total_kwh": {
+                          "type": "number",
+                          "description": "The meter's running total, in kilowatt-hours."
+                        }
+                      }
+                    },
+                    "signal_dbm": {
+                      "type": "integer",
+                      "description": "The plug's Wi-Fi signal strength in dBm."
+                    },
+                    "uptime_s": {
+                      "type": "integer",
+                      "description": "How long the plug has been up, in seconds."
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "host",
+                    "on"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not {\"on\": true|false} (INVALID_REQUEST)."
+          },
+          "404": {
+            "description": "No plug has that name (PLUG_NOT_FOUND)."
+          },
+          "502": {
+            "description": "The plug did not answer correctly (PLUG_UNREACHABLE)."
+          }
+        }
+      }
+    }
+  }
+}
