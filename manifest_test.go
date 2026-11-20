@@ -26,6 +26,10 @@ func TestTheManifestParsesWithTheSDK(t *testing.T) {
 		t.Fatalf("the manifest checks %v, want [%s]: access.go asks about it", declared.Checks, operateAction)
 	}
 
+	if declared.Kind != moduleKind {
+		t.Fatalf("the manifest's kind is %q, access.go asks about %q", declared.Kind, moduleKind)
+	}
+
 	if declared.Name != name {
 		t.Fatalf("the manifest names %q, the code reports %q", declared.Name, name)
 	}

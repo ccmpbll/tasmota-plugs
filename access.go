@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/prusa3d/prusa-connect/sdk/accessapi"
@@ -80,6 +82,7 @@ func allowed(w http.ResponseWriter, r *http.Request) bool {
 
 	switch {
 	case err != nil:
+		fmt.Fprintf(os.Stderr, "%s: could not ask the host whether %s may switch a plug, so it was refused: %v\n", name, principal, err)
 		refuse(w, r, AccessUnknown.New("the host could not say whether this person may switch a plug"))
 
 		return false
