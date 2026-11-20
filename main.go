@@ -11,7 +11,10 @@
 // The paths are relative to the mount, so a caller reaches them under
 // /api/v1/modules/com.github.aux.ccmpbll.tasmota-plugs/. The host decides
 // who may call them: view_resource on the instance for a read, operate_resource
-// for a write. This process checks no permission and holds no grant.
+// for a write. The power route asks the host again for operate_resource for the
+// caller (access.go), and operate on the printer the plug powers, because it can
+// cut the power of a printer mid-print.
+// This process holds no grant.
 //
 // # Settings
 //
@@ -45,6 +48,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/prusa3d/prusa-connect/sdk/accessapi"
 	"github.com/prusa3d/prusa-connect/sdk/busapi"
 	"github.com/prusa3d/prusa-connect/sdk/deviceapi"
 	"github.com/prusa3d/prusa-connect/sdk/extension"
@@ -58,7 +62,7 @@ import (
 // manifest's, and the host holds the two to each other.
 const (
 	name    = "smart-plugs"
-	release = extension.Version("0.1.0")
+	release = extension.Version("0.1.1")
 )
 
 // held is the settings this module is running on. It is an atomic value because
@@ -129,7 +133,10 @@ func run() error {
 	// this process. Nothing on the wire carries it.
 	fmt.Fprintf(os.Stderr, "%s %s is serving on stdio as pid %d\n", name, release, os.Getpid())
 
+	access := accessapi.NewClient(conn)
 	devices := deviceapi.NewClient(conn)
+	mayOperate = accessChecker(access)
+	mayOperatePrinter = printerChecker(access, devices)
 	snapshots := readSnapshots(devices)
 	printerState = stateReader(snapshots)
 	auto = newWatcher(snapshots)
@@ -206,10 +213,14 @@ func routes() http.Handler {
 	mux.HandleFunc("GET /plugs", func(w http.ResponseWriter, r *http.Request) {
 		current := settings()
 
+		// The host's answer is asked while the plugs are read, not after them.
+		can := canOperateSoon(r)
+
 		answer(w, http.StatusOK, map[string]any{
 			"items":         readAll(r.Context(), current.Plugs),
 			"price_per_kwh": current.PricePerKWH,
 			"currency":      current.Currency,
+			"can_operate":   can(),
 		})
 	})
 
@@ -235,10 +246,18 @@ func routes() http.Handler {
 	})
 
 	mux.HandleFunc("POST /plugs/{name}/power", func(w http.ResponseWriter, r *http.Request) {
+		// Before anything is read: who may switch a plug is the host's answer,
+		// asked for this caller. force cuts the power of a printer mid-print, so
+		// it is held to the same answer and no softer one.
+		if !allowed(w, r) {
+			return
+		}
+
 		var body struct {
 			On *bool `json:"on"`
 			// Force switches a plug off although its printer is busy. The app sends
-			// it after a person has confirmed, and nothing else should.
+			// it after a person has confirmed. Only a caller who may operate is
+			// heard at all (allowed above).
 			Force bool `json:"force"`
 		}
 
@@ -253,6 +272,12 @@ func routes() http.Handler {
 
 		config, p, ok := resolve(w, r)
 		if !ok {
+			return
+		}
+
+		// A plug that powers a printer is switched only by a person who may
+		// operate that printer too.
+		if config.Printer != "" && !allowedPrinter(w, r, config.Printer) {
 			return
 		}
 

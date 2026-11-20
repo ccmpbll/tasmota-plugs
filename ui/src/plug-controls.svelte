@@ -51,44 +51,47 @@
       <Badge variant="secondary">{t('smart-plugs.page.state.off')}</Badge>
     {/if}
 
-    {#if plug.on !== true}
-      <Button
-        size="sm"
-        pending={busy}
-        disabled={busy}
-        onclick={() => void store.setPower(plug, true)}
-      >
-        {t('smart-plugs.page.turn_on')}
-      </Button>
-    {/if}
+    <!-- A person who may not operate sees the state and no buttons. -->
+    {#if store.showsControls}
+      {#if plug.on !== true}
+        <Button
+          size="sm"
+          pending={busy}
+          disabled={busy}
+          onclick={() => void store.setPower(plug, true)}
+        >
+          {t('smart-plugs.page.turn_on')}
+        </Button>
+      {/if}
 
-    <!-- Nothing to turn off when it is already off. -->
-    {#if plug.on !== false && printing}
-      <ConfirmDialog
-        variant="destructive"
-        title={t('smart-plugs.page.confirm.title', { name: plug.name })}
-        description={t('smart-plugs.page.confirm.description', {
-          printer: device?.name ?? plug.printer ?? plug.name,
-        })}
-        confirmLabel={t('smart-plugs.page.turn_off')}
-        onConfirm={() => void store.setPower(plug, false, true)}
-      >
-        {#snippet trigger({ props })}
-          <Button {...props} size="sm" variant="destructive" disabled={busy}>
-            {t('smart-plugs.page.turn_off')}
-          </Button>
-        {/snippet}
-      </ConfirmDialog>
-    {:else if plug.on !== false}
-      <Button
-        size="sm"
-        variant="destructive"
-        pending={busy}
-        disabled={busy}
-        onclick={() => void store.setPower(plug, false)}
-      >
-        {t('smart-plugs.page.turn_off')}
-      </Button>
+      <!-- Nothing to turn off when it is already off. -->
+      {#if plug.on !== false && printing}
+        <ConfirmDialog
+          variant="destructive"
+          title={t('smart-plugs.page.confirm.title', { name: plug.name })}
+          description={t('smart-plugs.page.confirm.description', {
+            printer: device?.name ?? plug.printer ?? plug.name,
+          })}
+          confirmLabel={t('smart-plugs.page.turn_off')}
+          onConfirm={() => void store.setPower(plug, false, true)}
+        >
+          {#snippet trigger({ props })}
+            <Button {...props} size="sm" variant="destructive" disabled={busy}>
+              {t('smart-plugs.page.turn_off')}
+            </Button>
+          {/snippet}
+        </ConfirmDialog>
+      {:else if plug.on !== false}
+        <Button
+          size="sm"
+          variant="destructive"
+          pending={busy}
+          disabled={busy}
+          onclick={() => void store.setPower(plug, false)}
+        >
+          {t('smart-plugs.page.turn_off')}
+        </Button>
+      {/if}
     {/if}
   </div>
 

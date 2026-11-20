@@ -46,6 +46,8 @@ export interface PlugList {
   readonly items: readonly Plug[];
   readonly pricePerKwh: number | null;
   readonly currency: string;
+  /** Whether the caller may switch a plug. Null when the host could not say: show the buttons then, and the route decides. */
+  readonly canOperate: boolean | null;
 }
 
 /** What the page needs of the module's routes. A test hands in a fake. */
@@ -72,6 +74,7 @@ export const plugsOn = (host: ModuleHost): PlugsService => {
         items: answer.items,
         pricePerKwh: answer.price_per_kwh ?? null,
         currency: answer.currency,
+        canOperate: answer.can_operate ?? null,
       };
     },
     setPower: async (name, on, force, signal) => {

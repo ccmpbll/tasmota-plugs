@@ -21,15 +21,15 @@ import (
 )
 
 func main() {
-	server := flag.String("server", "http://127.0.0.1:18091", "the Connect server")
+	server := flag.String("server", "", "the Connect server's address (required)")
 	sn := flag.String("sn", "", "the printer's serial")
 	ptype := flag.String("type", "7.1.0", "the device type id (7.1.0 is a CORE One, 1.4.1 an MK4S)")
 	state := flag.String("state", "IDLE", "the state to report: IDLE, PRINTING, PAUSED")
 	nozzle := flag.Float64("nozzle", -1, "the nozzle temperature to report (default: 25 idle, 215 otherwise)")
 	bed := flag.Float64("bed", -1, "the bed temperature to report (default: 24 idle, 60 otherwise)")
 	flag.Parse()
-	if *sn == "" {
-		log.Fatal("-sn is required")
+	if *sn == "" || *server == "" {
+		log.Fatal("-server and -sn are required")
 	}
 
 	sum := sha256.Sum256([]byte(*sn))

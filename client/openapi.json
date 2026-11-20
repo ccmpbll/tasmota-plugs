@@ -1,7 +1,7 @@
 {
   "info": {
     "title": "smart-plugs",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "The routes smart-plugs serves. Every path is relative to the mount the host assigns, and the host serves this document rebased under it at \u003cmount\u003e/openapi.json."
   },
   "openapi": "3.1.0",
@@ -130,6 +130,13 @@
                     "currency": {
                       "type": "string",
                       "description": "What the price is written in."
+                    },
+                    "can_operate": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ],
+                      "description": "Whether the caller may switch a plug, so a page can hide the buttons. null when the host could not say, and then the switch route decides."
                     }
                   },
                   "required": [
@@ -278,7 +285,7 @@
       "post": {
         "operationId": "set-plug-power",
         "summary": "Switch one plug",
-        "description": "Sends Power On or Power Off to the named plug and reports success only when the plug answers 200 with the state that was asked for. The host takes operate_resource on the module's instance before this is called. Turning a plug off is refused with 409 PRINTER_BUSY while the printer it powers is printing, paused or waiting for a person in the middle of a print, unless `force` is true.",
+        "description": "Sends Power On or Power Off to the named plug and reports success only when the plug answers 200 with the state that was asked for. The host takes operate_resource on the module's instance before this is called, and the module asks it again for the caller (a viewer is refused with 403 ACCESS_DENIED, and so is a person who may not operate the printer the plug powers; a host that cannot answer is 503 ACCESS_UNKNOWN), because `force` can cut the power of a printer mid-print. Turning a plug off is refused with 409 PRINTER_BUSY while the printer it powers is printing, paused or waiting for a person in the middle of a print, unless `force` is true.",
         "parameters": [
           {
             "name": "name",
@@ -430,6 +437,12 @@
           },
           "409": {
             "description": "The printer the plug powers is printing or paused, and `force` was not set (PRINTER_BUSY)."
+          },
+          "403": {
+            "description": "The caller may not operate this extension, or the printer the plug powers (ACCESS_DENIED)."
+          },
+          "503": {
+            "description": "The host could not say whether the caller may operate (ACCESS_UNKNOWN). Send the request again."
           }
         }
       }

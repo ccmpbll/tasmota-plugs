@@ -59,6 +59,22 @@ var (
 		"state",
 	))
 
+	// AccessDenied is a person who may not switch a plug.
+	AccessDenied = fault.Register(faultDomain, "ACCESS_DENIED", http.StatusForbidden, fault.Document(
+		"This person may not switch a plug",
+		"Ask an operator or an administrator of this server to switch it.",
+		fault.RetryNever,
+		fault.ShowDetail,
+	))
+
+	// AccessUnknown is a switch the host could not decide.
+	AccessUnknown = fault.Register(faultDomain, "ACCESS_UNKNOWN", http.StatusServiceUnavailable, fault.Document(
+		"The host could not say whether this person may switch a plug",
+		"Send the request again in a moment.",
+		fault.RetryAllowed,
+		fault.ShowDetail,
+	))
+
 	// PlugNotFound is a call to a plug no setting names.
 	PlugNotFound = fault.Register(faultDomain, "PLUG_NOT_FOUND", http.StatusNotFound, fault.Document(
 		"No plug has that name",

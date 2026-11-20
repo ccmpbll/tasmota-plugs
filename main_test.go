@@ -1,20 +1,66 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/prusa3d/prusa-connect/sdk/accessapi"
+	"github.com/prusa3d/prusa-connect/sdk/deviceapi"
+	"github.com/prusa3d/prusa-connect/sdk/routesapi"
 )
 
+// do calls a route as an operator, the person every test but the access tests
+// is. The host decides who that is, so the answer is faked: user:operator may
+// switch a plug, anyone else may not.
 func do(method, path, body string) *httptest.ResponseRecorder {
+	return doAs("user:operator", method, path, body)
+}
+
+// doAs calls a route as the principal the host named, through the same
+// request the host's routes.serve call builds. An empty principal is a request
+// the host attributed to nobody.
+func doAs(principal, method, path, body string) *httptest.ResponseRecorder {
+	request, err := routesapi.Request{Method: method, Path: path, Body: []byte(body), Principal: principal}.HTTP(context.Background())
+	if err != nil {
+		panic(err)
+	}
+
 	recorder := httptest.NewRecorder()
-	routes().ServeHTTP(recorder, httptest.NewRequest(method, path, strings.NewReader(body)))
+	routes().ServeHTTP(recorder, request)
 
 	return recorder
+}
+
+func TestMain(m *testing.M) {
+	// user:operator may do everything. user:partial may operate the module but
+	// not a printer. user:nodevice's printer question cannot be answered.
+	mayOperate = func(_ context.Context, principal string) (bool, error) {
+		if principal == "user:broken" {
+			return false, errors.New("host busy")
+		}
+
+		return principal == "user:operator" || principal == "user:partial" || principal == "user:nodevice", nil
+	}
+	mayOperatePrinter = func(_ context.Context, principal, serial string) (ok, known bool, err error) {
+		switch {
+		case serial == "UNKNOWN-PRINTER":
+			return false, false, nil
+		case principal == "user:nodevice":
+			return false, false, errors.New("host busy")
+		}
+
+		return principal == "user:operator", true, nil
+	}
+
+	os.Exit(m.Run())
 }
 
 // code reads the registered code out of a refusal. A client branches on the
@@ -51,6 +97,10 @@ func withSettings(t *testing.T, s Settings) {
 // fake keeps its own relay state and answers like the firmware.
 func withFakePlugs(t *testing.T, plugs ...plugConfig) map[string]*string {
 	t.Helper()
+
+	// The page hints are kept for 30 seconds, so a test starts with none.
+	pageHints.reset()
+	t.Cleanup(pageHints.reset)
 
 	states := map[string]*string{}
 	bases := map[string]*httptest.Server{}
@@ -384,5 +434,253 @@ func TestADisplayNameIsFoundByItsEncodedRoute(t *testing.T) {
 		if *states[host] != "ON" {
 			t.Fatalf("%s did not switch %s", path, host)
 		}
+	}
+}
+
+// A person who may not operate cannot switch a plug, with or without force, and
+// the plug is never touched. Reads stay open to anyone the host let in.
+func TestOnlyAnOperatorSwitchesAPlug(t *testing.T) {
+	states := withFakePlugs(t, twoPlugs...)
+
+	for _, tc := range []struct {
+		who  string
+		body string
+		want int
+		code string
+	}{
+		{"user:viewer", `{"on":false}`, http.StatusForbidden, AccessDenied.Code().String()},
+		{"user:viewer", `{"on":false,"force":true}`, http.StatusForbidden, AccessDenied.Code().String()},
+		{"user:viewer", `{"on":true}`, http.StatusForbidden, AccessDenied.Code().String()},
+		{"", `{"on":false,"force":true}`, http.StatusForbidden, AccessDenied.Code().String()},
+		{"user:broken", `{"on":false,"force":true}`, http.StatusServiceUnavailable, AccessUnknown.Code().String()},
+	} {
+		recorder := doAs(tc.who, http.MethodPost, "/plugs/core-one/power", tc.body)
+		if recorder.Code != tc.want || code(t, recorder) != tc.code {
+			t.Fatalf("%q sending %s: answered %d %s, want %d %s", tc.who, tc.body, recorder.Code, recorder.Body, tc.want, tc.code)
+		}
+	}
+
+	if *states["core.lan"] != "OFF" || *states["mk4.lan"] != "OFF" {
+		t.Fatal("a refused caller switched a plug")
+	}
+
+	// Refused before the plug is looked up, so an unknown name tells a viewer nothing.
+	if recorder := doAs("user:viewer", http.MethodPost, "/plugs/nope/power", `{"on":true}`); recorder.Code != http.StatusForbidden {
+		t.Fatalf("a viewer calling an unknown plug got %d", recorder.Code)
+	}
+
+	if recorder := doAs("user:viewer", http.MethodGet, "/plugs", ""); recorder.Code != http.StatusOK {
+		t.Fatalf("a read answered %d", recorder.Code)
+	}
+
+	if recorder := doAs("user:operator", http.MethodPost, "/plugs/core-one/power", `{"on":true}`); recorder.Code != http.StatusOK || *states["core.lan"] != "ON" {
+		t.Fatalf("an operator answered %d", recorder.Code)
+	}
+}
+
+// fakeAccess records the question the module puts to the host.
+type fakeAccess struct{ asked accessapi.CheckParams }
+
+func (f *fakeAccess) Check(_ context.Context, p accessapi.CheckParams) (accessapi.Decision, error) {
+	f.asked = p
+
+	return accessapi.Decision{Allowed: true}, nil
+}
+
+// The three strings that decide whether any operator can switch a plug: a typo
+// in one refuses everybody, and the tests that fake mayOperate cannot see it.
+func TestTheHostIsAskedForOperateResourceOnTheModulesKind(t *testing.T) {
+	host := &fakeAccess{}
+
+	if ok, err := accessChecker(host)(context.Background(), "user:7"); err != nil || !ok {
+		t.Fatalf("answered %v, %v", ok, err)
+	}
+
+	want := accessapi.CheckParams{Subject: "user:7", Action: "operate_resource", ObjectType: "resource_kind", ObjectID: "sink"}
+	if host.asked != want {
+		t.Fatalf("asked %+v, want %+v", host.asked, want)
+	}
+}
+
+// The list tells the page whether to show the buttons. Unknown (no caller, a
+// host that cannot answer) is null, never false, so a hiccup hides nothing.
+func TestTheListSaysWhetherTheCallerMayOperate(t *testing.T) {
+	withFakePlugs(t, twoPlugs...)
+
+	for who, want := range map[string]string{
+		"user:operator": `"can_operate":true`,
+		"user:viewer":   `"can_operate":false`,
+		"user:broken":   `"can_operate":null`,
+		"":              `"can_operate":null`,
+	} {
+		if body := doAs(who, http.MethodGet, "/plugs", "").Body.String(); !strings.Contains(body, want) {
+			t.Fatalf("%q: the list lacks %s: %s", who, want, body)
+		}
+	}
+}
+
+// A page polling every few seconds asks the host once, not each time. The
+// switch route keeps nothing: it asks every time, so a revoked role stops it at
+// once.
+func TestOnlyThePageHintIsKept(t *testing.T) {
+	withFakePlugs(t, twoPlugs...)
+
+	asked := 0
+	allow := true
+	old := mayOperate
+	mayOperate = func(_ context.Context, _ string) (bool, error) { asked++; return allow, nil }
+
+	t.Cleanup(func() { mayOperate = old })
+
+	for range 3 {
+		doAs("user:operator", http.MethodGet, "/plugs", "")
+	}
+
+	if asked != 1 {
+		t.Fatalf("three polls asked the host %d times, want 1", asked)
+	}
+
+	if recorder := doAs("user:operator", http.MethodPost, "/plugs/core-one/power", `{"on":true}`); recorder.Code != http.StatusOK || asked != 2 {
+		t.Fatalf("a switch answered %d after %d questions, want 200 after 2", recorder.Code, asked)
+	}
+
+	allow = false
+
+	if recorder := doAs("user:operator", http.MethodPost, "/plugs/core-one/power", `{"on":false}`); recorder.Code != http.StatusForbidden {
+		t.Fatalf("a revoked person switched a plug: %d", recorder.Code)
+	}
+}
+
+// A process that was never given an access client switches nothing.
+func TestWithoutAnAccessClientNothingIsSwitched(t *testing.T) {
+	withFakePlugs(t, twoPlugs...)
+
+	old := mayOperate
+	mayOperate = noAccess
+
+	t.Cleanup(func() { mayOperate = old })
+
+	if ok, err := noAccess(context.Background(), "user:operator"); ok || err == nil {
+		t.Fatalf("the default answered %v, %v", ok, err)
+	}
+
+	if recorder := doAs("user:operator", http.MethodPost, "/plugs/core-one/power", `{"on":true}`); recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("answered %d, want 503", recorder.Code)
+	}
+}
+
+func (h *hints) reset() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	h.kept = map[string]hint{}
+}
+
+// A plug that powers a printer is switched only by a person who may operate the
+// printer too. A plug with no printer, and one whose printer the host does not
+// know, need the module-wide answer alone.
+func TestAPlugNeedsOperateOnItsPrinter(t *testing.T) {
+	plugs := append([]plugConfig{
+		{Slot: 3, Name: "bench", Host: "bench.lan"},
+		{Slot: 4, Name: "ghost", Host: "ghost.lan", Printer: "UNKNOWN-PRINTER"},
+	}, twoPlugs...)
+	states := withFakePlugs(t, plugs...)
+
+	switchOn := func(who, plug string) int {
+		return doAs(who, http.MethodPost, "/plugs/"+plug+"/power", `{"on":true}`).Code
+	}
+
+	if got := switchOn("user:partial", "core-one"); got != http.StatusForbidden || *states["core.lan"] != "OFF" {
+		t.Fatalf("a person who may not operate the printer got %d, plug %s", got, *states["core.lan"])
+	}
+
+	if got := switchOn("user:nodevice", "core-one"); got != http.StatusServiceUnavailable || *states["core.lan"] != "OFF" {
+		t.Fatalf("an unanswered printer question got %d, want 503 and no switch", got)
+	}
+
+	for _, plug := range []string{"bench", "ghost"} {
+		if got := switchOn("user:partial", plug); got != http.StatusOK {
+			t.Fatalf("%s: a person with the module-wide right got %d", plug, got)
+		}
+	}
+
+	if got := switchOn("user:operator", "core-one"); got != http.StatusOK || *states["core.lan"] != "ON" {
+		t.Fatalf("an operator got %d", got)
+	}
+}
+
+type fakeFleet struct{ items []deviceapi.Device }
+
+func (f fakeFleet) List(_ context.Context, p deviceapi.ListParams) (deviceapi.Page, error) {
+	end := min(p.Offset+2, len(f.items)) // two to a page, so paging is exercised
+
+	return deviceapi.Page{Items: f.items[min(p.Offset, end):end], Total: len(f.items)}, nil
+}
+
+// The printer's question: the device with that serial, however far down the
+// listing, and the action `operate` on it. A serial the host lacks is not asked.
+func TestThePrinterQuestionNamesTheDeviceBySerial(t *testing.T) {
+	host := &fakeAccess{}
+	fleet := fakeFleet{items: []deviceapi.Device{
+		{ID: "d1", Serial: "A"}, {ID: "d2", Serial: "B"}, {ID: "d3", Serial: "C"},
+	}}
+	ask := printerChecker(host, fleet)
+
+	ok, known, err := ask(context.Background(), "user:7", "C")
+	if err != nil || !ok || !known {
+		t.Fatalf("answered %v %v %v", ok, known, err)
+	}
+
+	want := accessapi.CheckParams{Subject: "user:7", Action: "operate", ObjectType: "device", ObjectID: "d3"}
+	if host.asked != want {
+		t.Fatalf("asked %+v, want %+v", host.asked, want)
+	}
+
+	host.asked = accessapi.CheckParams{}
+
+	if _, known, err = ask(context.Background(), "user:7", "Z"); known || err != nil || host.asked != (accessapi.CheckParams{}) {
+		t.Fatalf("an unknown serial: known=%v err=%v asked=%+v", known, err, host.asked)
+	}
+}
+
+// Only a "yes" is kept, and only for a while: a "no" is asked again (it may
+// have come from a narrower credential), and a "yes" past its time is asked
+// again.
+func TestOnlyAFreshYesIsKept(t *testing.T) {
+	withFakePlugs(t, twoPlugs...)
+
+	asked := 0
+	answer := false
+	old := mayOperate
+	mayOperate = func(context.Context, string) (bool, error) { asked++; return answer, nil }
+
+	t.Cleanup(func() { mayOperate = old })
+
+	poll := func() { doAs("user:x", http.MethodGet, "/plugs", "") }
+
+	poll()
+	poll()
+
+	if asked != 2 {
+		t.Fatalf("a \"no\" was kept: the host was asked %d times for two polls", asked)
+	}
+
+	answer = true
+
+	poll()
+	poll()
+
+	if asked != 3 {
+		t.Fatalf("a \"yes\" was asked again: %d questions for the third and fourth poll", asked-2)
+	}
+
+	pageHints.mu.Lock()
+	pageHints.kept["user:x"] = hint{ok: true, until: time.Now().Add(-time.Second)}
+	pageHints.mu.Unlock()
+
+	poll()
+
+	if asked != 4 {
+		t.Fatalf("an expired \"yes\" was still used: %d questions", asked)
 	}
 }
