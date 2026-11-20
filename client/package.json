@@ -1,7 +1,7 @@
 {
   "name": "smart-plugs-client",
   "version": "0.1.0",
-  "description": "A typed client for the routes of module com.github.aux.ccmpbll.prusa-connect-tasmota, generated from its OpenAPI fragment. It binds onto a @prusa/connect client.",
+  "description": "A typed client for the routes of module com.github.aux.ccmpbll.tasmota-plugs, generated from its OpenAPI fragment. It binds onto a @prusa/connect client.",
   "type": "module",
   "sideEffects": false,
   "exports": {

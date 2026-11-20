@@ -9,7 +9,7 @@
 //	POST /plugs/{name}/power    {"on": true|false} switches it and reports what the plug says
 //
 // The paths are relative to the mount, so a caller reaches them under
-// /api/v1/modules/com.github.aux.ccmpbll.prusa-connect-tasmota/. The host decides
+// /api/v1/modules/com.github.aux.ccmpbll.tasmota-plugs/. The host decides
 // who may call them: view_resource on the instance for a read, operate_resource
 // for a write. This process checks no permission and holds no grant.
 //
@@ -199,7 +199,7 @@ var plugAt = newPlug
 
 // routes is the surface this module serves, written as any Go program writes
 // one. The paths carry no prefix: /plugs here is
-// /api/v1/modules/com.github.aux.ccmpbll.prusa-connect-tasmota/plugs to a caller.
+// /api/v1/modules/com.github.aux.ccmpbll.tasmota-plugs/plugs to a caller.
 func routes() http.Handler {
 	mux := http.NewServeMux()
 

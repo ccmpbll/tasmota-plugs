@@ -33,7 +33,7 @@
 
   // The namespace Connect derives for this module, which is how its instance is
   // found among the server's resources whatever the operator named it.
-  const NAMESPACE = 'com.github.aux.ccmpbll.prusa-connect-tasmota';
+  const NAMESPACE = 'com.github.aux.ccmpbll.tasmota-plugs';
   // The module reads at most this many plugs: each host is a connection it
   // declares to the operator, one setting per slot.
   const MAX_PLUGS = 8;

@@ -1,4 +1,4 @@
-module github.com/ccmpbll/prusa-connect-tasmota
+module github.com/ccmpbll/tasmota-plugs
 
 go 1.26.11
 

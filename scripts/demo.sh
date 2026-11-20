@@ -43,7 +43,7 @@ cfg = open(src + "/config.yaml").read().replace(src + "/demo/resources.json", pa
 open(try_dir + "/config.yaml", "w").write(cfg)
 PY
 
-NS=com.github.aux.ccmpbll.prusa-connect-tasmota
+NS=com.github.aux.ccmpbll.tasmota-plugs
 cat <<EOT
 Demo core on http://127.0.0.1:$PORT, plugs: $*. In another terminal:
 

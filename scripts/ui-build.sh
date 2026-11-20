@@ -18,7 +18,7 @@ set -eu
 
 HERE=$(cd "$(dirname "$0")/.." && pwd)
 IMAGE=${NODE_IMAGE:-node:24-bookworm-slim}
-NAMESPACE=com.github.aux.ccmpbll.prusa-connect-tasmota
+NAMESPACE=com.github.aux.ccmpbll.tasmota-plugs
 
 echo "1. generating the typed client..."
 (cd "$HERE/.core" && go run ./cmd/generate-client-sdk -module -namespace "$NAMESPACE" \

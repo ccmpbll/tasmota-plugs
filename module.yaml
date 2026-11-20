@@ -9,7 +9,7 @@
 #
 # The namespace is absent on purpose. The host derives it from the repository
 # address the operator installed, so no module can name another module's
-# address. For this module that is com.github.aux.ccmpbll.prusa-connect-tasmota.
+# address. For this module that is com.github.aux.ccmpbll.tasmota-plugs.
 
 name: smart-plugs
 # The kind the one instance is declared under. It offers the service runtime,
