@@ -163,8 +163,8 @@ func TestReadRefusesWhatIsNotAStatus(t *testing.T) {
 	}
 }
 
-// PrintSpy's Tasmota client once treated any HTTP response as success, so a
-// 500 page or an echo of the opposite state read as a plug that had switched.
+// Treating any HTTP response as success is an easy mistake with a plug: a 500
+// page, or an echo of the opposite state, would read as a plug that had switched.
 func TestAnErrorStatusIsAnErrorNotASwitchOrAReading(t *testing.T) {
 	p, _ := fakePlug(t, func(string) (int, string) {
 		return http.StatusInternalServerError, statusJSON("POWER", "ON", energyBlock)
