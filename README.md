@@ -33,16 +33,6 @@ The overheat limits are a second layer: the printer's own firmware stops a runaw
 
 It asks for `observe`, to read printer states and serials, and connects only to the plug addresses you enter, on port 80.
 
-## Development
-
-```bash
-sh scripts/setup.sh                  # fetch the Prusa Connect SDK at the pinned release
-go test ./...                        # Go tests
-sh scripts/ui-build.sh               # build the page in a container (needs Docker)
-```
-
-`LOCKED=1 sh scripts/ui-steps.sh` runs the same browser steps natively, as CI does. `scripts/simprinter` and `scripts/fake-tasmota.py` stand in for a printer and a plug.
-
 ## License
 
 MIT, see `LICENSE`. It is built against Prusa Connect's SDK, which Prusa publishes under its own licence.
