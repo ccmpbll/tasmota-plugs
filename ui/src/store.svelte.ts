@@ -77,6 +77,8 @@ export class PlugStore {
   // What a kilowatt-hour costs, when the operator set a price, and its currency.
   pricePerKwh = $state<number | null>(null);
   currency = $state('$');
+  // False hides the Turn on and Turn off buttons. Null is unknown, and shows them.
+  canOperate = $state<boolean | null>(null);
   loaded = $state(false);
   failure = $state<string | undefined>();
   // True from a save until the module is back with the new settings.
@@ -135,6 +137,7 @@ export class PlugStore {
     this.plugs = list.items;
     this.pricePerKwh = list.pricePerKwh;
     this.currency = list.currency;
+    this.canOperate = list.canOperate;
     this.failure = undefined;
     this.#misses = 0;
     this.loaded = true;

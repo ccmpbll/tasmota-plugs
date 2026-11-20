@@ -130,6 +130,13 @@
                     "currency": {
                       "type": "string",
                       "description": "What the price is written in."
+                    },
+                    "can_operate": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ],
+                      "description": "Whether the caller may switch a plug, so a page can hide the buttons. null when the host could not say, and then the switch route decides."
                     }
                   },
                   "required": [
@@ -430,6 +437,12 @@
           },
           "409": {
             "description": "The printer the plug powers is printing or paused, and `force` was not set (PRINTER_BUSY)."
+          },
+          "403": {
+            "description": "The caller may not operate this extension (ACCESS_DENIED)."
+          },
+          "503": {
+            "description": "The host could not say whether the caller may operate (ACCESS_UNKNOWN). Send the request again."
           }
         }
       }

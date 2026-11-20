@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/prusa3d/prusa-connect/sdk/accessapi"
 	"github.com/prusa3d/prusa-connect/sdk/routesapi"
 )
 
@@ -456,5 +457,46 @@ func TestOnlyAnOperatorSwitchesAPlug(t *testing.T) {
 
 	if recorder := doAs("user:operator", http.MethodPost, "/plugs/core-one/power", `{"on":true}`); recorder.Code != http.StatusOK || *states["core.lan"] != "ON" {
 		t.Fatalf("an operator answered %d", recorder.Code)
+	}
+}
+
+// fakeAccess records the question the module puts to the host.
+type fakeAccess struct{ asked accessapi.CheckParams }
+
+func (f *fakeAccess) Check(_ context.Context, p accessapi.CheckParams) (accessapi.Decision, error) {
+	f.asked = p
+
+	return accessapi.Decision{Allowed: true}, nil
+}
+
+// The three strings that decide whether any operator can switch a plug: a typo
+// in one refuses everybody, and the tests that fake mayOperate cannot see it.
+func TestTheHostIsAskedForOperateResourceOnTheModulesKind(t *testing.T) {
+	host := &fakeAccess{}
+
+	if ok, err := accessChecker(host)(context.Background(), "user:7"); err != nil || !ok {
+		t.Fatalf("answered %v, %v", ok, err)
+	}
+
+	want := accessapi.CheckParams{Subject: "user:7", Action: "operate_resource", ObjectType: "resource_kind", ObjectID: "sink"}
+	if host.asked != want {
+		t.Fatalf("asked %+v, want %+v", host.asked, want)
+	}
+}
+
+// The list tells the page whether to show the buttons. Unknown (no caller, a
+// host that cannot answer) is null, never false, so a hiccup hides nothing.
+func TestTheListSaysWhetherTheCallerMayOperate(t *testing.T) {
+	withFakePlugs(t, twoPlugs...)
+
+	for who, want := range map[string]string{
+		"user:operator": `"can_operate":true`,
+		"user:viewer":   `"can_operate":false`,
+		"user:broken":   `"can_operate":null`,
+		"":              `"can_operate":null`,
+	} {
+		if body := doAs(who, http.MethodGet, "/plugs", "").Body.String(); !strings.Contains(body, want) {
+			t.Fatalf("%q: the list lacks %s: %s", who, want, body)
+		}
 	}
 }

@@ -3,6 +3,7 @@
 ### Fixed
 
 - Switching a plug now asks the host whether the caller may operate this extension (`operate_resource`), and refuses with `403 ACCESS_DENIED` when not. A viewer can no longer switch a plug, with or without `force`. A host that cannot answer refuses with `503 ACCESS_UNKNOWN`. The question is declared under `checks:` in `module.yaml`.
+- `GET /plugs` carries `can_operate`, and the Tasmota Plugs page, the printer tab and the dashboard card show no Turn on or Turn off buttons to a person who may not operate. The `403` and `503` answers are in `openapi.json`.
 
 ## 0.1.0 - 2026-11-19
 

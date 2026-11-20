@@ -55,7 +55,7 @@ export interface paths {
         put?: never;
         /**
          * Switch one plug
-         * @description Sends Power On or Power Off to the named plug and reports success only when the plug answers 200 with the state that was asked for. The host takes operate_resource on the module's instance before this is called. Turning a plug off is refused with 409 PRINTER_BUSY while the printer it powers is printing, paused or waiting for a person in the middle of a print, unless `force` is true.
+         * @description Sends Power On or Power Off to the named plug and reports success only when the plug answers 200 with the state that was asked for. The host takes operate_resource on the module's instance before this is called, and the module asks it again for the caller (a viewer is refused with 403 ACCESS_DENIED, a host that cannot answer with 503 ACCESS_UNKNOWN), because `force` can cut the power of a printer mid-print. Turning a plug off is refused with 409 PRINTER_BUSY while the printer it powers is printing, paused or waiting for a person in the middle of a print, unless `force` is true.
          */
         post: operations["set-plug-power"];
         delete?: never;
@@ -139,6 +139,8 @@ export interface operations {
                         price_per_kwh?: number | null;
                         /** @description What the price is written in. */
                         currency: string;
+                        /** @description Whether the caller may switch a plug, so a page can hide the buttons. null when the host could not say, and then the switch route decides. */
+                        can_operate?: boolean | null;
                     };
                 };
             };
@@ -301,6 +303,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description The caller may not operate this extension (ACCESS_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description No plug has that name (PLUG_NOT_FOUND). */
             404: {
                 headers: {
@@ -317,6 +326,13 @@ export interface operations {
             };
             /** @description The plug did not answer correctly (PLUG_UNREACHABLE). */
             502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The host could not say whether the caller may operate (ACCESS_UNKNOWN). Send the request again. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -19,6 +19,7 @@ const list = (...names: string[]): PlugList => ({
   items: names.map(plug),
   pricePerKwh: null,
   currency: '$',
+  canOperate: null,
 });
 
 // sessionStorage as a Map, which is all the store asks of it.
@@ -63,6 +64,27 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
+});
+
+describe('who may operate', () => {
+  it('follows the list: unknown shows the buttons, only false hides them', async () => {
+    const answer = (canOperate: boolean | null): PlugList => ({
+      ...list('a'),
+      canOperate,
+    });
+    const store = storeOn(
+      serving(answer(null), answer(false), answer(true)).service,
+    );
+
+    await store.refresh();
+    expect(store.canOperate).toBeNull();
+
+    await store.refresh();
+    expect(store.canOperate).toBe(false);
+
+    await store.refresh();
+    expect(store.canOperate).toBe(true);
+  });
 });
 
 describe('a read that fails', () => {

@@ -215,6 +215,7 @@ func routes() http.Handler {
 			"items":         readAll(r.Context(), current.Plugs),
 			"price_per_kwh": current.PricePerKWH,
 			"currency":      current.Currency,
+			"can_operate":   canOperate(r),
 		})
 	})
 
