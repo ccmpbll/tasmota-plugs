@@ -183,35 +183,35 @@ options:
 egress:
   - option: plug1_host
     ports: [80]
-    why: "Plug 1: reads the plug\'s state and energy meter and switches the relay, over Tasmota\'s HTTP command interface."
+    why: "Plug 1: reads the plug's state and energy meter and switches the relay, over Tasmota's HTTP command interface."
     sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
   - option: plug2_host
     ports: [80]
-    why: "Plug 2: reads the plug\'s state and energy meter and switches the relay, over Tasmota\'s HTTP command interface."
+    why: "Plug 2: reads the plug's state and energy meter and switches the relay, over Tasmota's HTTP command interface."
     sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
   - option: plug3_host
     ports: [80]
-    why: "Plug 3: reads the plug\'s state and energy meter and switches the relay, over Tasmota\'s HTTP command interface."
+    why: "Plug 3: reads the plug's state and energy meter and switches the relay, over Tasmota's HTTP command interface."
     sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
   - option: plug4_host
     ports: [80]
-    why: "Plug 4: reads the plug\'s state and energy meter and switches the relay, over Tasmota\'s HTTP command interface."
+    why: "Plug 4: reads the plug's state and energy meter and switches the relay, over Tasmota's HTTP command interface."
     sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
   - option: plug5_host
     ports: [80]
-    why: "Plug 5: reads the plug\'s state and energy meter and switches the relay, over Tasmota\'s HTTP command interface."
+    why: "Plug 5: reads the plug's state and energy meter and switches the relay, over Tasmota's HTTP command interface."
     sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
   - option: plug6_host
     ports: [80]
-    why: "Plug 6: reads the plug\'s state and energy meter and switches the relay, over Tasmota\'s HTTP command interface."
+    why: "Plug 6: reads the plug's state and energy meter and switches the relay, over Tasmota's HTTP command interface."
     sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
   - option: plug7_host
     ports: [80]
-    why: "Plug 7: reads the plug\'s state and energy meter and switches the relay, over Tasmota\'s HTTP command interface."
+    why: "Plug 7: reads the plug's state and energy meter and switches the relay, over Tasmota's HTTP command interface."
     sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
   - option: plug8_host
     ports: [80]
-    why: "Plug 8: reads the plug\'s state and energy meter and switches the relay, over Tasmota\'s HTTP command interface."
+    why: "Plug 8: reads the plug's state and energy meter and switches the relay, over Tasmota's HTTP command interface."
     sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
 
 # The memory in MiB the server may budget for the process, children included.
