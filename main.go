@@ -62,7 +62,7 @@ import (
 // manifest's, and the host holds the two to each other.
 const (
 	name    = "smart-plugs"
-	release = extension.Version("0.1.1")
+	release = extension.Version("0.1.2")
 )
 
 // held is the settings this module is running on. It is an atomic value because

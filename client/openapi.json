@@ -1,7 +1,7 @@
 {
   "info": {
     "title": "smart-plugs",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "description": "The routes smart-plugs serves. Every path is relative to the mount the host assigns, and the host serves this document rebased under it at \u003cmount\u003e/openapi.json."
   },
   "openapi": "3.1.0",
