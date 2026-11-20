@@ -1,4 +1,6 @@
-## 0.1.1 - 2026-11-20
+## 0.1.2 - 2026-11-20
+
+Replaces 0.1.1, which the marketplace refused before publishing because `module.yaml` held an invalid YAML escape.
 
 ### Fixed
 
