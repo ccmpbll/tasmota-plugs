@@ -26,7 +26,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 CHECKOUT=$HERE/.core
 
 NAME=smart-plugs
-MODULE=github.com/ccmpbll/prusa-connect-tasmota
+MODULE=github.com/ccmpbll/tasmota-plugs
 VERSION=0.1.0
 
 # Everything this writes goes under the checkout's bin/, which is ignored, and

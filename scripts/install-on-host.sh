@@ -135,7 +135,7 @@ else
 	echo "NOTE  no SHA256SUMS beside the bundle, so the copy was not checked"
 fi
 
-MODULE=github.com/ccmpbll/prusa-connect-tasmota
+MODULE=github.com/ccmpbll/tasmota-plugs
 VERSION=$(tar -xzOf "$DIR/$BUNDLE" module.yaml | sed -n 's/^version: *//p' | head -n 1)
 [ -n "$VERSION" ] || fail "could not read the version from $BUNDLE"
 
@@ -236,12 +236,14 @@ run docker stop "$CONTAINER"
 [ "$DRY" = 1 ] || STOPPED=1
 
 echo "3. installing..."
-# Before this repository was named prusa-connect-tasmota the module was installed
-# as github.com/ccmpbll/connect-smart-plugs. If that one is still here it is taken
-# away, so the two do not both draw a Plugs page. Nothing happens when it is not.
-OLD_MODULE=github.com/ccmpbll/connect-smart-plugs
-# shellcheck disable=SC2086 # CONFIG_FLAG is empty or " -config <path>"
-run inside /prusa_connect module remove "$OLD_MODULE" $CONFIG_FLAG > /dev/null 2>&1 || true
+# This module was installed as github.com/ccmpbll/connect-smart-plugs and then as
+# github.com/ccmpbll/prusa-connect-tasmota before it was named tasmota-plugs. If
+# either is still here it is taken away, so the two do not both draw a Tasmota
+# Plugs page. Nothing happens when neither is.
+for OLD_MODULE in github.com/ccmpbll/connect-smart-plugs github.com/ccmpbll/prusa-connect-tasmota; do
+	# shellcheck disable=SC2086 # CONFIG_FLAG is empty or " -config <path>"
+	run inside /prusa_connect module remove "$OLD_MODULE" $CONFIG_FLAG > /dev/null 2>&1 || true
+done
 # With no plugs there is no -settings, so the settings already saved are kept.
 SETTINGS_FLAG=
 [ "$HAVE_PLUGS" = 0 ] || SETTINGS_FLAG=" -settings /data/smart-plugs-settings.json"

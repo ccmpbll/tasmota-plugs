@@ -1,4 +1,4 @@
-# prusa-connect-tasmota
+# tasmota-plugs
 
 > An unofficial, community-made extension. It is not made, endorsed or supported
 > by Prusa Research.
@@ -20,7 +20,7 @@ obvious next steps.
 | `GET /plugs/{name}` | one plug, the same way |
 | `POST /plugs/{name}/power` | `{"on": true\|false, "force"?: true}` switches it, and succeeds only when the plug answers 200 with the state asked for. Turning off is refused with `409 PRINTER_BUSY` while the printer is busy, unless `force` |
 
-All are under `/api/v1/modules/com.github.aux.ccmpbll.prusa-connect-tasmota/`.
+All are under `/api/v1/modules/com.github.aux.ccmpbll.tasmota-plugs/`.
 
 ## In the app
 
@@ -73,8 +73,8 @@ and builds the bundle. Run it again after any change under `ui/` or to
 `openapi.json`, then rebuild the kit. The bundle may not carry its own copy of
 Svelte's code, so `svelte/reactivity` is not used: the host shares only `svelte`.
 
-Its namespace is `com.github.aux.ccmpbll.prusa-connect-tasmota`, derived by the host from the repository
-address `github.com/ccmpbll/prusa-connect-tasmota`. You never write the namespace: every address the module
+Its namespace is `com.github.aux.ccmpbll.tasmota-plugs`, derived by the host from the repository
+address `github.com/ccmpbll/tasmota-plugs`. You never write the namespace: every address the module
 answers on is built from it.
 
 | path | purpose |
@@ -256,7 +256,7 @@ addresses, so the entries are what the operator reads, not a sandbox.
 
 When the module cannot do what a request asks, it answers with an error. The
 error has a `code` and a `title` in English. Every code of this module starts
-with `com.github.aux.ccmpbll.prusa-connect-tasmota`.
+with `com.github.aux.ccmpbll.tasmota-plugs`.
 
 A program that calls the module should check the `code`. The title is for
 people. You can change the wording of a title without breaking a caller.
@@ -272,9 +272,9 @@ reads. A `checksums.txt` is optional and verified when it is there; a release
 you just built has nothing to prove against.
 
 ```bash
-prusa-connect module add github.com/ccmpbll/prusa-connect-tasmota@0.1.0 -from dist
+prusa-connect module add github.com/ccmpbll/tasmota-plugs@0.1.0 -from dist
 prusa-connect module list
-prusa-connect module remove github.com/ccmpbll/prusa-connect-tasmota
+prusa-connect module remove github.com/ccmpbll/tasmota-plugs
 ```
 
 Without `-approve` the declaration is written switched off, and the command
@@ -357,8 +357,8 @@ submits it. One-time setup:
    gh secret set PRUSA_CONNECT_EXTENSION_SIGNING_KEY --env release < private_key.pem
    ```
 4. **Trusted publishing.** In the author console, add the extension id
-   `com.github.aux.ccmpbll.prusa-connect-tasmota`, the repository
-   `ccmpbll/prusa-connect-tasmota`, the workflow file `release.yml` and the
+   `com.github.aux.ccmpbll.tasmota-plugs`, the repository
+   `ccmpbll/tasmota-plugs`, the workflow file `release.yml` and the
    environment `release`. There is no marketplace password or API key to store.
 5. **Release.** Set `version` in `module.yaml` (and the changelog), then publish a
    GitHub release whose tag ends with it, for example `v0.1.0`. A pre-release goes to

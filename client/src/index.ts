@@ -11,7 +11,7 @@ export interface Client {
 }
 
 /**
- * bind attaches every operation of module com.github.aux.ccmpbll.prusa-connect-tasmota to the client's
+ * bind attaches every operation of module com.github.aux.ccmpbll.tasmota-plugs to the client's
  * transport. A call carries the client's URL and credential, and a refusal
  * is the same ApiError the core's operations throw, with the module's own
  * code as a string.

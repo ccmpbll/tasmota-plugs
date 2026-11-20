@@ -4,7 +4,7 @@
  */
 
 export interface paths {
-    "/api/v1/modules/com.github.aux.ccmpbll.prusa-connect-tasmota/plugs": {
+    "/api/v1/modules/com.github.aux.ccmpbll.tasmota-plugs/plugs": {
         parameters: {
             query?: never;
             header?: never;
@@ -24,7 +24,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/modules/com.github.aux.ccmpbll.prusa-connect-tasmota/plugs/{name}": {
+    "/api/v1/modules/com.github.aux.ccmpbll.tasmota-plugs/plugs/{name}": {
         parameters: {
             query?: never;
             header?: never;
@@ -44,7 +44,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/modules/com.github.aux.ccmpbll.prusa-connect-tasmota/plugs/{name}/power": {
+    "/api/v1/modules/com.github.aux.ccmpbll.tasmota-plugs/plugs/{name}/power": {
         parameters: {
             query?: never;
             header?: never;
