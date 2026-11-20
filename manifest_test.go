@@ -22,6 +22,10 @@ func TestTheManifestParsesWithTheSDK(t *testing.T) {
 		t.Fatalf("module.yaml is refused: %v", err)
 	}
 
+	if len(declared.Checks) != 1 || declared.Checks[0] != operateAction {
+		t.Fatalf("the manifest checks %v, want [%s]: access.go asks about it", declared.Checks, operateAction)
+	}
+
 	if declared.Name != name {
 		t.Fatalf("the manifest names %q, the code reports %q", declared.Name, name)
 	}

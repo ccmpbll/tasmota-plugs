@@ -1,20 +1,51 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/prusa3d/prusa-connect/sdk/routesapi"
 )
 
+// do calls a route as an operator, the person every test but the access tests
+// is. The host decides who that is, so the answer is faked: user:operator may
+// switch a plug, anyone else may not.
 func do(method, path, body string) *httptest.ResponseRecorder {
+	return doAs("user:operator", method, path, body)
+}
+
+// doAs calls a route as the principal the host named, through the same
+// request the host's routes.serve call builds. An empty principal is a request
+// the host attributed to nobody.
+func doAs(principal, method, path, body string) *httptest.ResponseRecorder {
+	request, err := routesapi.Request{Method: method, Path: path, Body: []byte(body), Principal: principal}.HTTP(context.Background())
+	if err != nil {
+		panic(err)
+	}
+
 	recorder := httptest.NewRecorder()
-	routes().ServeHTTP(recorder, httptest.NewRequest(method, path, strings.NewReader(body)))
+	routes().ServeHTTP(recorder, request)
 
 	return recorder
+}
+
+func TestMain(m *testing.M) {
+	mayOperate = func(_ context.Context, principal string) (bool, error) {
+		if principal == "user:broken" {
+			return false, errors.New("host busy")
+		}
+
+		return principal == "user:operator", nil
+	}
+
+	os.Exit(m.Run())
 }
 
 // code reads the registered code out of a refusal. A client branches on the
@@ -384,5 +415,46 @@ func TestADisplayNameIsFoundByItsEncodedRoute(t *testing.T) {
 		if *states[host] != "ON" {
 			t.Fatalf("%s did not switch %s", path, host)
 		}
+	}
+}
+
+// A person who may not operate cannot switch a plug, with or without force, and
+// the plug is never touched. Reads stay open to anyone the host let in.
+func TestOnlyAnOperatorSwitchesAPlug(t *testing.T) {
+	states := withFakePlugs(t, twoPlugs...)
+
+	for _, tc := range []struct {
+		who  string
+		body string
+		want int
+		code string
+	}{
+		{"user:viewer", `{"on":false}`, http.StatusForbidden, AccessDenied.Code().String()},
+		{"user:viewer", `{"on":false,"force":true}`, http.StatusForbidden, AccessDenied.Code().String()},
+		{"user:viewer", `{"on":true}`, http.StatusForbidden, AccessDenied.Code().String()},
+		{"", `{"on":false,"force":true}`, http.StatusForbidden, AccessDenied.Code().String()},
+		{"user:broken", `{"on":false,"force":true}`, http.StatusServiceUnavailable, AccessUnknown.Code().String()},
+	} {
+		recorder := doAs(tc.who, http.MethodPost, "/plugs/core-one/power", tc.body)
+		if recorder.Code != tc.want || code(t, recorder) != tc.code {
+			t.Fatalf("%q sending %s: answered %d %s, want %d %s", tc.who, tc.body, recorder.Code, recorder.Body, tc.want, tc.code)
+		}
+	}
+
+	if *states["core.lan"] != "OFF" || *states["mk4.lan"] != "OFF" {
+		t.Fatal("a refused caller switched a plug")
+	}
+
+	// Refused before the plug is looked up, so an unknown name tells a viewer nothing.
+	if recorder := doAs("user:viewer", http.MethodPost, "/plugs/nope/power", `{"on":true}`); recorder.Code != http.StatusForbidden {
+		t.Fatalf("a viewer calling an unknown plug got %d", recorder.Code)
+	}
+
+	if recorder := doAs("user:viewer", http.MethodGet, "/plugs", ""); recorder.Code != http.StatusOK {
+		t.Fatalf("a read answered %d", recorder.Code)
+	}
+
+	if recorder := doAs("user:operator", http.MethodPost, "/plugs/core-one/power", `{"on":true}`); recorder.Code != http.StatusOK || *states["core.lan"] != "ON" {
+		t.Fatalf("an operator answered %d", recorder.Code)
 	}
 }

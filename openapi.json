@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "smart-plugs",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "The routes smart-plugs serves. Every path is relative to the mount the host assigns, and the host serves this document rebased under it at <mount>/openapi.json."
   },
   "paths": {
@@ -278,7 +278,7 @@
       "post": {
         "operationId": "set-plug-power",
         "summary": "Switch one plug",
-        "description": "Sends Power On or Power Off to the named plug and reports success only when the plug answers 200 with the state that was asked for. The host takes operate_resource on the module's instance before this is called. Turning a plug off is refused with 409 PRINTER_BUSY while the printer it powers is printing, paused or waiting for a person in the middle of a print, unless `force` is true.",
+        "description": "Sends Power On or Power Off to the named plug and reports success only when the plug answers 200 with the state that was asked for. The host takes operate_resource on the module's instance before this is called, and the module asks it again for the caller (a viewer is refused with 403 ACCESS_DENIED, a host that cannot answer with 503 ACCESS_UNKNOWN), because `force` can cut the power of a printer mid-print. Turning a plug off is refused with 409 PRINTER_BUSY while the printer it powers is printing, paused or waiting for a person in the middle of a print, unless `force` is true.",
         "parameters": [
           {
             "name": "name",

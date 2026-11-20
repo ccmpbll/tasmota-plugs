@@ -1,8 +1,7 @@
-# The manifest for smart-plugs, a module that is the Go process in main.go and
-# nothing else. There is no ui block, so it draws nothing in the app. It drives
-# up to eight Tasmota plugs over HTTP, one or more per printer, adds a Tasmota Plugs
-# page to the app, and logs the print events of the printers the host lets it
-# observe.
+# The manifest for smart-plugs: the Go process in main.go and the browser half
+# in ui/. It drives up to eight Tasmota plugs over HTTP, one or more per
+# printer, adds a Tasmota Plugs page, a printer tab and a dashboard card to the
+# app, and logs the print events of the printers the host lets it observe.
 #
 # `prusa-connect module add` reads it out of the release and writes one
 # declaration from it.
@@ -15,7 +14,7 @@ name: smart-plugs
 # The kind the one instance is declared under. It offers the service runtime,
 # which is what a module with a process needs.
 kind: sink
-version: 0.1.0
+version: 0.1.1
 # The licence this module is released under. The marketplace shows it and
 # refuses a release without one. An SPDX identifier is the usual form.
 license: MIT
@@ -223,6 +222,11 @@ egress:
 # starts and settles.
 permissions:
   - observe
+
+# Ask the host whether the person calling may operate this module before a plug
+# is switched. It only asks: the install grants this module nothing for it.
+checks:
+  - operate_resource
 
 # The browser half: a Tasmota Plugs page in the app's sidebar, a line and a section for
 # each printer that has a plug, built by `sh scripts/ui-build.sh`
