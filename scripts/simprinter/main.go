@@ -21,7 +21,7 @@ import (
 )
 
 func main() {
-	server := flag.String("server", "", "the Connect server's address, (required)")
+	server := flag.String("server", "", "the Connect server's address (required)")
 	sn := flag.String("sn", "", "the printer's serial")
 	ptype := flag.String("type", "7.1.0", "the device type id (7.1.0 is a CORE One, 1.4.1 an MK4S)")
 	state := flag.String("state", "IDLE", "the state to report: IDLE, PRINTING, PAUSED")

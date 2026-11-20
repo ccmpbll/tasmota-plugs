@@ -80,6 +80,7 @@ export class PlugStore {
   // False hides the Turn on and Turn off buttons. Null is unknown, and shows them.
   canOperate = $state<boolean | null>(null);
   loaded = $state(false);
+
   failure = $state<string | undefined>();
   // True from a save until the module is back with the new settings.
   applying = $state(false);
@@ -87,6 +88,11 @@ export class PlugStore {
   // module but not `svelte/reactivity`, which a bundle may not carry itself.
   switching = $state<Record<string, boolean>>({});
   refused = $state<Record<string, string>>({});
+
+  /** Whether to draw the Turn on and Turn off buttons: only a known "no" hides them. */
+  get showsControls(): boolean {
+    return this.canOperate !== false;
+  }
 
   readonly #signal: AbortSignal;
   readonly #service: PlugsService;

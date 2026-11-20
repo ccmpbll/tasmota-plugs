@@ -84,6 +84,17 @@ func withSettings(t *testing.T, s Settings) {
 func withFakePlugs(t *testing.T, plugs ...plugConfig) map[string]*string {
 	t.Helper()
 
+	// The page hints are kept for 30 seconds, so a test starts with none.
+	clear := func() {
+		pageHints.mu.Lock()
+		defer pageHints.mu.Unlock()
+
+		pageHints.kept = map[string]hint{}
+	}
+
+	clear()
+	t.Cleanup(clear)
+
 	states := map[string]*string{}
 	bases := map[string]*httptest.Server{}
 
@@ -498,5 +509,55 @@ func TestTheListSaysWhetherTheCallerMayOperate(t *testing.T) {
 		if body := doAs(who, http.MethodGet, "/plugs", "").Body.String(); !strings.Contains(body, want) {
 			t.Fatalf("%q: the list lacks %s: %s", who, want, body)
 		}
+	}
+}
+
+// A page polling every few seconds asks the host once, not each time. The
+// switch route keeps nothing: it asks every time, so a revoked role stops it at
+// once.
+func TestOnlyThePageHintIsKept(t *testing.T) {
+	withFakePlugs(t, twoPlugs...)
+
+	asked := 0
+	allow := true
+	old := mayOperate
+	mayOperate = func(_ context.Context, _ string) (bool, error) { asked++; return allow, nil }
+
+	t.Cleanup(func() { mayOperate = old })
+
+	for range 3 {
+		doAs("user:polling", http.MethodGet, "/plugs", "")
+	}
+
+	if asked != 1 {
+		t.Fatalf("three polls asked the host %d times, want 1", asked)
+	}
+
+	if recorder := doAs("user:polling", http.MethodPost, "/plugs/core-one/power", `{"on":true}`); recorder.Code != http.StatusOK || asked != 2 {
+		t.Fatalf("a switch answered %d after %d questions, want 200 after 2", recorder.Code, asked)
+	}
+
+	allow = false
+
+	if recorder := doAs("user:polling", http.MethodPost, "/plugs/core-one/power", `{"on":false}`); recorder.Code != http.StatusForbidden {
+		t.Fatalf("a revoked person switched a plug: %d", recorder.Code)
+	}
+}
+
+// A process that was never given an access client switches nothing.
+func TestWithoutAnAccessClientNothingIsSwitched(t *testing.T) {
+	withFakePlugs(t, twoPlugs...)
+
+	old := mayOperate
+	mayOperate = noAccess
+
+	t.Cleanup(func() { mayOperate = old })
+
+	if ok, err := noAccess(context.Background(), "user:operator"); ok || err == nil {
+		t.Fatalf("the default answered %v, %v", ok, err)
+	}
+
+	if recorder := doAs("user:operator", http.MethodPost, "/plugs/core-one/power", `{"on":true}`); recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("answered %d, want 503", recorder.Code)
 	}
 }

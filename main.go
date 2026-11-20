@@ -211,11 +211,16 @@ func routes() http.Handler {
 	mux.HandleFunc("GET /plugs", func(w http.ResponseWriter, r *http.Request) {
 		current := settings()
 
+		// The host's answer is asked while the plugs are read, not after them.
+		can := make(chan *bool, 1)
+
+		go func() { can <- canOperate(r) }()
+
 		answer(w, http.StatusOK, map[string]any{
 			"items":         readAll(r.Context(), current.Plugs),
 			"price_per_kwh": current.PricePerKWH,
 			"currency":      current.Currency,
-			"can_operate":   canOperate(r),
+			"can_operate":   <-can,
 		})
 	})
 

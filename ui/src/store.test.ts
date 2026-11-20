@@ -78,12 +78,15 @@ describe('who may operate', () => {
 
     await store.refresh();
     expect(store.canOperate).toBeNull();
+    expect(store.showsControls).toBe(true);
 
     await store.refresh();
     expect(store.canOperate).toBe(false);
+    expect(store.showsControls).toBe(false);
 
     await store.refresh();
     expect(store.canOperate).toBe(true);
+    expect(store.showsControls).toBe(true);
   });
 });
 

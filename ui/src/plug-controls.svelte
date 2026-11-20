@@ -52,7 +52,7 @@
     {/if}
 
     <!-- A person who may not operate sees the state and no buttons. -->
-    {#if store.canOperate !== false}
+    {#if store.showsControls}
       {#if plug.on !== true}
         <Button
           size="sm"
