@@ -55,7 +55,7 @@ export interface paths {
         put?: never;
         /**
          * Switch one plug
-         * @description Sends Power On or Power Off to the named plug and reports success only when the plug answers 200 with the state that was asked for. The host takes operate_resource on the module's instance before this is called, and the module asks it again for the caller (a viewer is refused with 403 ACCESS_DENIED, a host that cannot answer with 503 ACCESS_UNKNOWN), because `force` can cut the power of a printer mid-print. Turning a plug off is refused with 409 PRINTER_BUSY while the printer it powers is printing, paused or waiting for a person in the middle of a print, unless `force` is true.
+         * @description Sends Power On or Power Off to the named plug and reports success only when the plug answers 200 with the state that was asked for. The host takes operate_resource on the module's instance before this is called, and the module asks it again for the caller (a viewer is refused with 403 ACCESS_DENIED, and so is a person who may not operate the printer the plug powers; a host that cannot answer is 503 ACCESS_UNKNOWN), because `force` can cut the power of a printer mid-print. Turning a plug off is refused with 409 PRINTER_BUSY while the printer it powers is printing, paused or waiting for a person in the middle of a print, unless `force` is true.
          */
         post: operations["set-plug-power"];
         delete?: never;
@@ -303,7 +303,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description The caller may not operate this extension (ACCESS_DENIED). */
+            /** @description The caller may not operate this extension, or the printer the plug powers (ACCESS_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;

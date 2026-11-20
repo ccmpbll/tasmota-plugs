@@ -12,7 +12,8 @@
 // /api/v1/modules/com.github.aux.ccmpbll.tasmota-plugs/. The host decides
 // who may call them: view_resource on the instance for a read, operate_resource
 // for a write. The power route asks the host again for operate_resource for the
-// caller (access.go), because it can cut the power of a printer mid-print.
+// caller (access.go), and operate on the printer the plug powers, because it can
+// cut the power of a printer mid-print.
 // This process holds no grant.
 //
 // # Settings
@@ -132,9 +133,10 @@ func run() error {
 	// this process. Nothing on the wire carries it.
 	fmt.Fprintf(os.Stderr, "%s %s is serving on stdio as pid %d\n", name, release, os.Getpid())
 
-	mayOperate = accessChecker(accessapi.NewClient(conn))
-
+	access := accessapi.NewClient(conn)
 	devices := deviceapi.NewClient(conn)
+	mayOperate = accessChecker(access)
+	mayOperatePrinter = printerChecker(access, devices)
 	snapshots := readSnapshots(devices)
 	printerState = stateReader(snapshots)
 	auto = newWatcher(snapshots)
@@ -212,15 +214,13 @@ func routes() http.Handler {
 		current := settings()
 
 		// The host's answer is asked while the plugs are read, not after them.
-		can := make(chan *bool, 1)
-
-		go func() { can <- canOperate(r) }()
+		can := canOperateSoon(r)
 
 		answer(w, http.StatusOK, map[string]any{
 			"items":         readAll(r.Context(), current.Plugs),
 			"price_per_kwh": current.PricePerKWH,
 			"currency":      current.Currency,
-			"can_operate":   <-can,
+			"can_operate":   can(),
 		})
 	})
 
@@ -272,6 +272,12 @@ func routes() http.Handler {
 
 		config, p, ok := resolve(w, r)
 		if !ok {
+			return
+		}
+
+		// A plug that powers a printer is switched only by a person who may
+		// operate that printer too.
+		if config.Printer != "" && !allowedPrinter(w, r, config.Printer) {
 			return
 		}
 

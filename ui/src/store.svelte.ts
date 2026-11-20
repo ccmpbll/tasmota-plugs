@@ -80,7 +80,6 @@ export class PlugStore {
   // False hides the Turn on and Turn off buttons. Null is unknown, and shows them.
   canOperate = $state<boolean | null>(null);
   loaded = $state(false);
-
   failure = $state<string | undefined>();
   // True from a save until the module is back with the new settings.
   applying = $state(false);

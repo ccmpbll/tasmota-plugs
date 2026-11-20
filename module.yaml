@@ -183,36 +183,36 @@ options:
 egress:
   - option: plug1_host
     ports: [80]
-    why: "Plug 1: reads the plug's relay state and switches it, over Tasmota's HTTP command interface."
-    sends: Only Power, Power On and Power Off commands.
+    why: "Plug 1: reads the plug\'s state and energy meter and switches the relay, over Tasmota\'s HTTP command interface."
+    sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
   - option: plug2_host
     ports: [80]
-    why: "Plug 2: reads the plug's relay state and switches it, over Tasmota's HTTP command interface."
-    sends: Only Power, Power On and Power Off commands.
+    why: "Plug 2: reads the plug\'s state and energy meter and switches the relay, over Tasmota\'s HTTP command interface."
+    sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
   - option: plug3_host
     ports: [80]
-    why: "Plug 3: reads the plug's relay state and switches it, over Tasmota's HTTP command interface."
-    sends: Only Power, Power On and Power Off commands.
+    why: "Plug 3: reads the plug\'s state and energy meter and switches the relay, over Tasmota\'s HTTP command interface."
+    sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
   - option: plug4_host
     ports: [80]
-    why: "Plug 4: reads the plug's relay state and switches it, over Tasmota's HTTP command interface."
-    sends: Only Power, Power On and Power Off commands.
+    why: "Plug 4: reads the plug\'s state and energy meter and switches the relay, over Tasmota\'s HTTP command interface."
+    sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
   - option: plug5_host
     ports: [80]
-    why: "Plug 5: reads the plug's relay state and switches it, over Tasmota's HTTP command interface."
-    sends: Only Power, Power On and Power Off commands.
+    why: "Plug 5: reads the plug\'s state and energy meter and switches the relay, over Tasmota\'s HTTP command interface."
+    sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
   - option: plug6_host
     ports: [80]
-    why: "Plug 6: reads the plug's relay state and switches it, over Tasmota's HTTP command interface."
-    sends: Only Power, Power On and Power Off commands.
+    why: "Plug 6: reads the plug\'s state and energy meter and switches the relay, over Tasmota\'s HTTP command interface."
+    sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
   - option: plug7_host
     ports: [80]
-    why: "Plug 7: reads the plug's relay state and switches it, over Tasmota's HTTP command interface."
-    sends: Only Power, Power On and Power Off commands.
+    why: "Plug 7: reads the plug\'s state and energy meter and switches the relay, over Tasmota\'s HTTP command interface."
+    sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
   - option: plug8_host
     ports: [80]
-    why: "Plug 8: reads the plug's relay state and switches it, over Tasmota's HTTP command interface."
-    sends: Only Power, Power On and Power Off commands.
+    why: "Plug 8: reads the plug\'s state and energy meter and switches the relay, over Tasmota\'s HTTP command interface."
+    sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
 
 # The memory in MiB the server may budget for the process, children included.
 # needs:
@@ -223,10 +223,12 @@ egress:
 permissions:
   - observe
 
-# Ask the host whether the person calling may operate this module before a plug
-# is switched. It only asks: the install grants this module nothing for it.
+# Ask the host whether the person calling may operate this module
+# (operate_resource), and the printer a plug powers (operate), before a plug is
+# switched. It only asks: the install grants this module nothing for it.
 checks:
   - operate_resource
+  - operate
 
 # The browser half: a Tasmota Plugs page in the app's sidebar, a line and a section for
 # each printer that has a plug, built by `sh scripts/ui-build.sh`

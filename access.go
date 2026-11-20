@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/prusa3d/prusa-connect/sdk/accessapi"
+	"github.com/prusa3d/prusa-connect/sdk/deviceapi"
 	"github.com/prusa3d/prusa-connect/sdk/routesapi"
 )
 
@@ -19,13 +20,19 @@ import (
 const (
 	operateAction = "operate_resource"
 	moduleKind    = "sink" // the kind in module.yaml
+
+	// operatePrinter is the device action asked about for the printer a plug powers.
+	operatePrinter = "operate"
 )
 
 // askTimeout bounds one question to the host.
 const askTimeout = 4 * time.Second
 
-// hintFor is how long the page's hint (can_operate) is kept per person. The
-// switch route never uses it: it asks the host every time.
+// hintFor is how long a "yes" for the page's hint (can_operate) is kept per
+// person. The switch route never uses it: it asks the host every time. A "no" is
+// never kept: the host answers within the scopes of the credential that asked,
+// and a read-only token's "no" must not hide the buttons from the same person's
+// full session.
 const hintFor = 30 * time.Second
 
 var errNoCaller = errors.New("the request names nobody to act as")
@@ -50,6 +57,60 @@ func accessChecker(access accessapi.Access) func(context.Context, string) (bool,
 		})
 
 		return decision.Allowed, err
+	}
+}
+
+// mayOperatePrinter answers whether the person may operate the printer with this
+// serial. known is false when the host has no printer with that serial, and then
+// there is nobody's print to protect: the module-wide answer stands. It is a
+// variable for the same reason as mayOperate.
+//
+//nolint:gochecknoglobals // a test seam.
+var mayOperatePrinter = func(context.Context, string, string) (ok, known bool, err error) {
+	return false, false, errors.New("no access client")
+}
+
+// fleetLister is the half of the host's device API that finds a printer's id.
+type fleetLister interface {
+	List(ctx context.Context, params deviceapi.ListParams) (deviceapi.Page, error)
+}
+
+// printerChecker finds the host's id for a printer by its serial, then asks
+// whether the person may operate that device.
+func printerChecker(access accessapi.Access, fleet fleetLister) func(context.Context, string, string) (ok, known bool, err error) {
+	return func(ctx context.Context, principal, serial string) (ok, known bool, err error) {
+		id, err := deviceIDOf(ctx, fleet, serial)
+		if err != nil || id == "" {
+			return false, false, err
+		}
+
+		decision, err := access.Check(ctx, accessapi.CheckParams{
+			Subject: principal, Action: operatePrinter, ObjectType: "device", ObjectID: id,
+		})
+
+		return decision.Allowed, true, err
+	}
+}
+
+// deviceIDOf is the id of the printer with this serial, or empty when the host
+// has none.
+func deviceIDOf(ctx context.Context, fleet fleetLister, serial string) (string, error) {
+	for offset := 0; ; {
+		page, err := fleet.List(ctx, deviceapi.ListParams{Limit: deviceapi.MaxPageLimit, Offset: offset})
+		if err != nil {
+			return "", err
+		}
+
+		for _, device := range page.Items {
+			if device.Serial == serial {
+				return device.ID, nil
+			}
+		}
+
+		offset += len(page.Items)
+		if len(page.Items) == 0 || offset >= page.Total {
+			return "", nil
+		}
 	}
 }
 
@@ -111,13 +172,22 @@ func (h *hints) put(principal string, ok bool) {
 	h.kept[principal] = hint{ok: ok, until: now.Add(hintFor)}
 }
 
+// cachedHint is the kept "yes" for the caller, or nil.
+func cachedHint(r *http.Request) *bool {
+	if ok, hit := pageHints.get(routesapi.PrincipalOf(r)); hit && ok {
+		return &ok
+	}
+
+	return nil
+}
+
 // canOperate says whether the caller may switch a plug, for the page to show or
 // hide its buttons. Nil means unknown (no caller, or the host did not answer):
-// the page then shows them, and the switch route decides. It may be up to
+// the page then shows them, and the switch route decides. A "yes" may be up to
 // hintFor behind a change of role, which only a button's looks depend on.
 func canOperate(r *http.Request) *bool {
-	if ok, hit := pageHints.get(routesapi.PrincipalOf(r)); hit {
-		return &ok
+	if hit := cachedHint(r); hit != nil {
+		return hit
 	}
 
 	principal, ok, err := decide(r)
@@ -125,9 +195,25 @@ func canOperate(r *http.Request) *bool {
 		return nil
 	}
 
-	pageHints.put(principal, ok)
+	if ok {
+		pageHints.put(principal, ok)
+	}
 
 	return &ok
+}
+
+// canOperateSoon starts the host's question and returns what waits for the
+// answer, so it runs while the plugs are read. A kept "yes" needs no question.
+func canOperateSoon(r *http.Request) func() *bool {
+	if hit := cachedHint(r); hit != nil {
+		return func() *bool { return hit }
+	}
+
+	done := make(chan *bool, 1)
+
+	go func() { done <- canOperate(r) }()
+
+	return func() *bool { return <-done }
 }
 
 // allowed reports whether this request may switch a plug, and answers the
@@ -149,6 +235,33 @@ func allowed(w http.ResponseWriter, r *http.Request) bool {
 		return false
 	case !ok:
 		refuse(w, r, AccessDenied.New("this person may not switch a plug"))
+
+		return false
+	}
+
+	return true
+}
+
+// allowedPrinter reports whether this request's caller may operate the printer
+// with this serial, and answers the request itself when not. A printer the host
+// does not know is nobody's print to protect, so the module-wide answer (asked
+// by allowed) stands. Like allowed it asks every time and keeps nothing.
+func allowedPrinter(w http.ResponseWriter, r *http.Request, serial string) bool {
+	principal := routesapi.PrincipalOf(r)
+
+	ctx, cancel := context.WithTimeout(r.Context(), askTimeout)
+	defer cancel()
+
+	ok, known, err := mayOperatePrinter(ctx, principal, serial)
+
+	switch {
+	case err != nil:
+		fmt.Fprintf(os.Stderr, "%s: could not ask the host whether %s may operate printer %s, so the switch was refused: %v\n", name, principal, serial, err)
+		refuse(w, r, AccessUnknown.New("the host could not say whether this person may operate the printer"))
+
+		return false
+	case known && !ok:
+		refuse(w, r, AccessDenied.New("this person may not operate the printer this plug powers"))
 
 		return false
 	}

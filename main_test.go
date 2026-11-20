@@ -10,8 +10,10 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/prusa3d/prusa-connect/sdk/accessapi"
+	"github.com/prusa3d/prusa-connect/sdk/deviceapi"
 	"github.com/prusa3d/prusa-connect/sdk/routesapi"
 )
 
@@ -38,12 +40,24 @@ func doAs(principal, method, path, body string) *httptest.ResponseRecorder {
 }
 
 func TestMain(m *testing.M) {
+	// user:operator may do everything. user:partial may operate the module but
+	// not a printer. user:nodevice's printer question cannot be answered.
 	mayOperate = func(_ context.Context, principal string) (bool, error) {
 		if principal == "user:broken" {
 			return false, errors.New("host busy")
 		}
 
-		return principal == "user:operator", nil
+		return principal == "user:operator" || principal == "user:partial" || principal == "user:nodevice", nil
+	}
+	mayOperatePrinter = func(_ context.Context, principal, serial string) (ok, known bool, err error) {
+		switch {
+		case serial == "UNKNOWN-PRINTER":
+			return false, false, nil
+		case principal == "user:nodevice":
+			return false, false, errors.New("host busy")
+		}
+
+		return principal == "user:operator", true, nil
 	}
 
 	os.Exit(m.Run())
@@ -85,15 +99,8 @@ func withFakePlugs(t *testing.T, plugs ...plugConfig) map[string]*string {
 	t.Helper()
 
 	// The page hints are kept for 30 seconds, so a test starts with none.
-	clear := func() {
-		pageHints.mu.Lock()
-		defer pageHints.mu.Unlock()
-
-		pageHints.kept = map[string]hint{}
-	}
-
-	clear()
-	t.Cleanup(clear)
+	pageHints.reset()
+	t.Cleanup(pageHints.reset)
 
 	states := map[string]*string{}
 	bases := map[string]*httptest.Server{}
@@ -526,20 +533,20 @@ func TestOnlyThePageHintIsKept(t *testing.T) {
 	t.Cleanup(func() { mayOperate = old })
 
 	for range 3 {
-		doAs("user:polling", http.MethodGet, "/plugs", "")
+		doAs("user:operator", http.MethodGet, "/plugs", "")
 	}
 
 	if asked != 1 {
 		t.Fatalf("three polls asked the host %d times, want 1", asked)
 	}
 
-	if recorder := doAs("user:polling", http.MethodPost, "/plugs/core-one/power", `{"on":true}`); recorder.Code != http.StatusOK || asked != 2 {
+	if recorder := doAs("user:operator", http.MethodPost, "/plugs/core-one/power", `{"on":true}`); recorder.Code != http.StatusOK || asked != 2 {
 		t.Fatalf("a switch answered %d after %d questions, want 200 after 2", recorder.Code, asked)
 	}
 
 	allow = false
 
-	if recorder := doAs("user:polling", http.MethodPost, "/plugs/core-one/power", `{"on":false}`); recorder.Code != http.StatusForbidden {
+	if recorder := doAs("user:operator", http.MethodPost, "/plugs/core-one/power", `{"on":false}`); recorder.Code != http.StatusForbidden {
 		t.Fatalf("a revoked person switched a plug: %d", recorder.Code)
 	}
 }
@@ -559,5 +566,121 @@ func TestWithoutAnAccessClientNothingIsSwitched(t *testing.T) {
 
 	if recorder := doAs("user:operator", http.MethodPost, "/plugs/core-one/power", `{"on":true}`); recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("answered %d, want 503", recorder.Code)
+	}
+}
+
+func (h *hints) reset() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	h.kept = map[string]hint{}
+}
+
+// A plug that powers a printer is switched only by a person who may operate the
+// printer too. A plug with no printer, and one whose printer the host does not
+// know, need the module-wide answer alone.
+func TestAPlugNeedsOperateOnItsPrinter(t *testing.T) {
+	plugs := append([]plugConfig{
+		{Slot: 3, Name: "bench", Host: "bench.lan"},
+		{Slot: 4, Name: "ghost", Host: "ghost.lan", Printer: "UNKNOWN-PRINTER"},
+	}, twoPlugs...)
+	states := withFakePlugs(t, plugs...)
+
+	switchOn := func(who, plug string) int {
+		return doAs(who, http.MethodPost, "/plugs/"+plug+"/power", `{"on":true}`).Code
+	}
+
+	if got := switchOn("user:partial", "core-one"); got != http.StatusForbidden || *states["core.lan"] != "OFF" {
+		t.Fatalf("a person who may not operate the printer got %d, plug %s", got, *states["core.lan"])
+	}
+
+	if got := switchOn("user:nodevice", "core-one"); got != http.StatusServiceUnavailable || *states["core.lan"] != "OFF" {
+		t.Fatalf("an unanswered printer question got %d, want 503 and no switch", got)
+	}
+
+	for _, plug := range []string{"bench", "ghost"} {
+		if got := switchOn("user:partial", plug); got != http.StatusOK {
+			t.Fatalf("%s: a person with the module-wide right got %d", plug, got)
+		}
+	}
+
+	if got := switchOn("user:operator", "core-one"); got != http.StatusOK || *states["core.lan"] != "ON" {
+		t.Fatalf("an operator got %d", got)
+	}
+}
+
+type fakeFleet struct{ items []deviceapi.Device }
+
+func (f fakeFleet) List(_ context.Context, p deviceapi.ListParams) (deviceapi.Page, error) {
+	end := min(p.Offset+2, len(f.items)) // two to a page, so paging is exercised
+
+	return deviceapi.Page{Items: f.items[min(p.Offset, end):end], Total: len(f.items)}, nil
+}
+
+// The printer's question: the device with that serial, however far down the
+// listing, and the action `operate` on it. A serial the host lacks is not asked.
+func TestThePrinterQuestionNamesTheDeviceBySerial(t *testing.T) {
+	host := &fakeAccess{}
+	fleet := fakeFleet{items: []deviceapi.Device{
+		{ID: "d1", Serial: "A"}, {ID: "d2", Serial: "B"}, {ID: "d3", Serial: "C"},
+	}}
+	ask := printerChecker(host, fleet)
+
+	ok, known, err := ask(context.Background(), "user:7", "C")
+	if err != nil || !ok || !known {
+		t.Fatalf("answered %v %v %v", ok, known, err)
+	}
+
+	want := accessapi.CheckParams{Subject: "user:7", Action: "operate", ObjectType: "device", ObjectID: "d3"}
+	if host.asked != want {
+		t.Fatalf("asked %+v, want %+v", host.asked, want)
+	}
+
+	host.asked = accessapi.CheckParams{}
+
+	if _, known, err = ask(context.Background(), "user:7", "Z"); known || err != nil || host.asked != (accessapi.CheckParams{}) {
+		t.Fatalf("an unknown serial: known=%v err=%v asked=%+v", known, err, host.asked)
+	}
+}
+
+// Only a "yes" is kept, and only for a while: a "no" is asked again (it may
+// have come from a narrower credential), and a "yes" past its time is asked
+// again.
+func TestOnlyAFreshYesIsKept(t *testing.T) {
+	withFakePlugs(t, twoPlugs...)
+
+	asked := 0
+	answer := false
+	old := mayOperate
+	mayOperate = func(context.Context, string) (bool, error) { asked++; return answer, nil }
+
+	t.Cleanup(func() { mayOperate = old })
+
+	poll := func() { doAs("user:x", http.MethodGet, "/plugs", "") }
+
+	poll()
+	poll()
+
+	if asked != 2 {
+		t.Fatalf("a \"no\" was kept: the host was asked %d times for two polls", asked)
+	}
+
+	answer = true
+
+	poll()
+	poll()
+
+	if asked != 3 {
+		t.Fatalf("a \"yes\" was asked again: %d questions for the third and fourth poll", asked-2)
+	}
+
+	pageHints.mu.Lock()
+	pageHints.kept["user:x"] = hint{ok: true, until: time.Now().Add(-time.Second)}
+	pageHints.mu.Unlock()
+
+	poll()
+
+	if asked != 4 {
+		t.Fatalf("an expired \"yes\" was still used: %d questions", asked)
 	}
 }

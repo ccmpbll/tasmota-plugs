@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"slices"
 	"testing"
 
 	"github.com/prusa3d/prusa-connect/sdk/manifest"
@@ -22,8 +23,8 @@ func TestTheManifestParsesWithTheSDK(t *testing.T) {
 		t.Fatalf("module.yaml is refused: %v", err)
 	}
 
-	if len(declared.Checks) != 1 || declared.Checks[0] != operateAction {
-		t.Fatalf("the manifest checks %v, want [%s]: access.go asks about it", declared.Checks, operateAction)
+	if want := []string{operateAction, operatePrinter}; !slices.Equal(declared.Checks, want) {
+		t.Fatalf("the manifest checks %v, want %v: access.go asks about both", declared.Checks, want)
 	}
 
 	if declared.Kind != moduleKind {
