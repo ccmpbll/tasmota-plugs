@@ -216,8 +216,11 @@ func routes() http.Handler {
 		// The host's answer is asked while the plugs are read, not after them.
 		can := canOperateSoon(r)
 
+		ctx, cancel := context.WithTimeout(r.Context(), readBudget)
+		defer cancel()
+
 		answer(w, http.StatusOK, map[string]any{
-			"items":         readAll(r.Context(), current.Plugs),
+			"items":         readAll(ctx, current.Plugs),
 			"price_per_kwh": current.PricePerKWH,
 			"currency":      current.Currency,
 			"can_operate":   can(),
@@ -360,10 +363,22 @@ func viewOf(config plugConfig, r Reading, mark uint64) plugView {
 	return view
 }
 
-// readAll asks every plug for its state at once. A plug that does not answer
-// is a row with an error, so one dead plug never hides the others.
+// The list has no length limit, so a read is bounded here instead: it talks to
+// at most maxParallel plugs at a time, and the whole read gives up after
+// readBudget. A plug that did not get its turn by then shows an error and is
+// read at the next poll. A plug that does not answer holds its place for up to 6
+// seconds, so 32 of them cost a few seconds, and 20 seconds is room for a list of
+// over a hundred plugs that are all dead.
+const (
+	maxParallel = 32
+	readBudget  = 20 * time.Second
+)
+
+// readAll asks every plug for its state, maxParallel at a time. A plug that does
+// not answer is a row with an error, so one dead plug never hides the others.
 func readAll(ctx context.Context, plugs []plugConfig) []plugView {
 	views := make([]plugView, len(plugs))
+	turns := make(chan struct{}, maxParallel)
 
 	var wg sync.WaitGroup
 
@@ -374,6 +389,17 @@ func readAll(ctx context.Context, plugs []plugConfig) []plugView {
 
 		go func() {
 			defer wg.Done()
+
+			// Every plug waits for its turn. The ones that hold a turn stop at the
+			// read's deadline, so a plug whose turn comes after it is told so here.
+			turns <- struct{}{}
+			defer func() { <-turns }()
+
+			if ctx.Err() != nil {
+				views[i].Error = "not read in time: there are too many plugs to read at once"
+
+				return
+			}
 
 			ctx, cancel := context.WithTimeout(ctx, 6*time.Second)
 			defer cancel()

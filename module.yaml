@@ -89,7 +89,7 @@ options:
 egress:
   - option: plugs
     ports: [80]
-    why: "Every plug listed in the plugs setting: reads its state and energy meter and switches its relay, over Tasmota's HTTP command interface."
+    why: "The host of every plug in the plugs setting, a JSON list of name, host and printer: reads its state and energy meter and switches its relay, over Tasmota's HTTP command interface."
     sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
 
 # The memory in MiB the server may budget for the process, children included.

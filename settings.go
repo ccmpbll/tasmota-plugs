@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"math"
 	"slices"
 	"strconv"
@@ -198,7 +200,9 @@ func parsePlugs(text string) ([]plugConfig, error) {
 		return nil, fmt.Errorf(`%s is not a list of {"name", "host", "printer"}: %w`, keyPlugs, err)
 	}
 
-	if decoder.More() {
+	// More() would say false for a stray ] or }, so the rest is read as a value:
+	// anything but the end of the text is text after the list.
+	if err := decoder.Decode(new(json.RawMessage)); !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("%s has text after the list", keyPlugs)
 	}
 

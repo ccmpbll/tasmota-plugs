@@ -611,6 +611,57 @@ func TestThePrintersAreNotReadWhenNoPlugIsLinkedToOne(t *testing.T) {
 	}
 }
 
+// After an upgrade that dropped the plugs the limits stay set and nothing is
+// linked: that must be said, once, so it does not look like protection.
+func TestALimitWithNoPlugLinkedToAPrinterIsSaidOnce(t *testing.T) {
+	for name, plugs := range map[string][]plugConfig{
+		"no plugs at all":             nil,
+		"plugs that power no printer": {{Slot: 1, Name: "lamp", Host: "lamp.lan"}},
+	} {
+		r := newRig(t, Auto{OverheatNozzleC: 300}, plugs...)
+
+		for range 4 {
+			r.look(time.Minute)
+		}
+
+		said := 0
+
+		for _, line := range r.logs {
+			if strings.Contains(line, "no plug is linked to a printer") {
+				said++
+			}
+		}
+
+		if said != 1 {
+			t.Fatalf("%s: said %d times, want once: %v", name, said, r.logs)
+		}
+
+		// A plug linked later ends it, and losing the link again says it again.
+		settings := &Settings{Plugs: []plugConfig{coreOne}, Auto: Auto{OverheatNozzleC: 300}}
+		r.w.settings = func() *Settings { return settings }
+		r.snaps["CZPX-1"] = cool("IDLE")
+		r.look(time.Minute)
+
+		settings = &Settings{Auto: Auto{OverheatNozzleC: 300}}
+		r.look(time.Minute)
+
+		if again := strings.Count(strings.Join(r.logs, "\n"), "no plug is linked to a printer"); again != 2 {
+			t.Fatalf("%s: said %d times after the link came and went, want 2: %v", name, again, r.logs)
+		}
+	}
+}
+
+func TestNoLimitMeansNothingIsSaidAboutLinks(t *testing.T) {
+	r := newRig(t, Auto{})
+
+	r.look(time.Minute)
+	r.look(time.Minute)
+
+	if len(r.logs) != 0 {
+		t.Fatalf("said %v with no limit set", r.logs)
+	}
+}
+
 func TestAReasonEndsWhenAPlugIsSeenOnOrSwitchedByAPerson(t *testing.T) {
 	plugs := []plugConfig{coreOne}
 	withSettings(t, Settings{Plugs: plugs})

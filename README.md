@@ -31,7 +31,7 @@ The overheat limits are a second layer: the printer's own firmware stops a runaw
 
 ## Permissions
 
-It asks for `observe`, to read printer states and serials, and connects only to the plug addresses you enter, on port 80. The plugs are kept in one setting, `plugs`, a JSON list: `[{"name": "Core One", "host": "192.168.1.30", "printer": "CZPX1234"}]`. The Set up plugs page writes it; you only edit it by hand in the server's configuration file.
+It asks for `observe`, to read printer states and serials, and connects only to the plug addresses you enter, on port 80. The plugs are kept in one setting, `plugs`, whose value is text that holds a JSON list, such as `'[{"name": "Core One", "host": "192.168.1.30", "printer": "CZPX1234"}]'`. The quotes matter: it is a string, not a list of the configuration file's own. The Set up plugs page writes it; you only edit it by hand in the server's configuration file.
 
 ## License
 

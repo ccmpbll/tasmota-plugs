@@ -3,7 +3,8 @@
 ### Changed
 
 - There is no limit on how many plugs you can set up. The plugs are now one setting, `plugs`, a JSON list of `{"name", "host", "printer"}`, in place of the `plug1_name` to `plug8_printer` settings. The Set up plugs page writes it, and a name that is left empty is `plug1`, `plug2` and so on by its place in the list. `install.sh` writes it from its `name=host=serial` arguments, and the egress is one entry for the `plugs` setting.
-- **Upgrading from 0.1:** the old per-plug settings are no longer accepted. Set the plugs up again on the Tasmota Plugs page, or give them to `install.sh` again.
+- **Upgrading from 0.1:** the old per-plug settings are no longer accepted. Set the plugs up again on the Tasmota Plugs page, or give them to `install.sh` again. Until you do, no plug is linked to a printer, so the automatic power-off and overheat limits you set have nothing to act on. The module says so in its log.
+- Reading the plugs talks to at most 32 at a time and gives up after 20 seconds, so a long list does not open hundreds of connections at once. A plug that did not get its turn shows an error, and is read at the next refresh.
 
 ## 0.1.2 - 2026-11-20
 

@@ -84,6 +84,8 @@ func TestUnknownKeysAndBadPlugListsAreRefused(t *testing.T) {
 		withPlugs(`[{"name":"a","host":5}]`),                          // a number for text
 		withPlugs(`[{"name":"a","host":"a.lan"}] [{"host":"b.lan"}]`), // text after the list
 		withPlugs(`[{"name":"a","host":"a.lan"},`),                    // cut short
+		withPlugs(`[{"name":"a","host":"a.lan"}]]`),                   // a stray closing bracket
+		withPlugs(`[{"name":"a","host":"a.lan"}]}`),                   // a stray closing brace
 	} {
 		if _, err := parse(t, body); err == nil {
 			t.Fatalf("%s was accepted", body)
