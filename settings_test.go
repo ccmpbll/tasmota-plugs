@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -310,5 +311,39 @@ func TestTheAutomaticLimitRangesAreTheSameInGoTheManifestAndThePage(t *testing.T
 		if want := fmt.Sprintf("%d to %d", limit.low, limit.high); !strings.Contains(summaries[limit.key], want) {
 			t.Errorf("the manifest says %q for %s, want it to say %q", summaries[limit.key], limit.key, want)
 		}
+	}
+}
+
+// The page saves the plugs as JSON and the module refuses a key it does not
+// know, so a key the page misspells would leave a module that cannot start after
+// Save. This holds the page's keys to plugEntry's, for reading and for writing.
+func TestThePageUsesTheKeysOfAPlugEntry(t *testing.T) {
+	page, err := os.ReadFile("ui/src/plug-setup.svelte")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	written := regexp.MustCompile(`JSON\.stringify\(\s*rows\.map\(\([^)]*\) => \(\{([^}]*)\}\)`).FindStringSubmatch(string(page))
+	if written == nil {
+		t.Fatal("the page no longer writes the plugs with JSON.stringify(rows.map(...)): update this test")
+	}
+
+	var keys []string
+
+	for field := range reflect.TypeFor[plugEntry]().Fields() {
+		key, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+		keys = append(keys, key)
+
+		if !strings.Contains(string(page), "word(plug, '"+key+"')") {
+			t.Errorf("the page does not read %q from a plug", key)
+		}
+
+		if !regexp.MustCompile(`\b` + key + `:`).MatchString(written[1]) {
+			t.Errorf("the page does not write %q for a plug", key)
+		}
+	}
+
+	if got := strings.Count(written[1], ":"); got != len(keys) {
+		t.Errorf("the page writes %d keys for a plug, and plugEntry has %d (%v)", got, len(keys), keys)
 	}
 }

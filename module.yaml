@@ -1,5 +1,5 @@
 # The manifest for smart-plugs: the Go process in main.go and the browser half
-# in ui/. It drives up to eight Tasmota plugs over HTTP, one or more per
+# in ui/. It drives Tasmota plugs over HTTP, as many as you list, one or more per
 # printer, adds a Tasmota Plugs page, a printer tab and a dashboard card to the
 # app, and logs the print events of the printers the host lets it observe.
 #
