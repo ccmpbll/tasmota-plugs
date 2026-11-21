@@ -5,7 +5,7 @@
 #   sh scripts/demo.sh <name>=<host>[=<printer serial>] ...
 #   sh scripts/demo.sh core-one=127.0.0.1=DEMO-01 mk4s=localhost=DEMO-02
 #
-# One argument per plug, up to eight. 127.0.0.1 is where scripts/fake-tasmota.py
+# One argument per plug. 127.0.0.1 is where scripts/fake-tasmota.py
 # listens, and the demo's simulated printers have the serials DEMO-01 and up.
 #
 # It installs the module first (sh install.sh), copies the demo's data to
@@ -29,10 +29,11 @@ rm -rf "$TRY" && mkdir -p "$TRY" && cp -R "$SRC/demo" "$TRY/demo"
 python3 - "$TRY" "$SRC" "$@" <<'PY'
 import json, sys
 try_dir, src, plugs = sys.argv[1], sys.argv[2], sys.argv[3:]
-config = {}
-for n, spec in enumerate(plugs, 1):
+plug_list = []
+for spec in plugs:
     name, host, *serial = spec.split("=")
-    config.update({f"plug{n}_name": name, f"plug{n}_host": host, f"plug{n}_printer": (serial or [""])[0]})
+    plug_list.append({"name": name, "host": host, "printer": (serial or [""])[0]})
+config = {"plugs": json.dumps(plug_list)}
 path = try_dir + "/demo/resources.json"
 doc = json.load(open(path))
 for inst in doc["instances"]:

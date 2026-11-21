@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -304,10 +304,11 @@ func TestOnlyTheDeclaredMethodsAreServed(t *testing.T) {
 	}
 }
 
-// TestTheManifestDeclaresEverySlotAndItsEgress holds module.yaml to the code:
-// every key the settings accept is a declared option, and every plug host is a
-// declared connection on port 80, so the operator's list is the whole list.
-func TestTheManifestDeclaresEverySlotAndItsEgress(t *testing.T) {
+// TestTheManifestDeclaresTheSettingsAndTheEgress holds module.yaml to the code:
+// every key the settings accept is a declared option, and the plugs setting,
+// which holds every plug host, is declared as the connection on port 80, so the
+// operator's list is the whole list. No per-plug key is left behind.
+func TestTheManifestDeclaresTheSettingsAndTheEgress(t *testing.T) {
 	manifest, err := os.ReadFile("module.yaml")
 	if err != nil {
 		t.Fatalf("read module.yaml: %v", err)
@@ -315,20 +316,16 @@ func TestTheManifestDeclaresEverySlotAndItsEgress(t *testing.T) {
 
 	text := string(manifest)
 
-	for slot := 1; slot <= maxPlugs; slot++ {
-		for _, field := range []string{"name", "host", "printer"} {
-			if key := fmt.Sprintf("plug%d_%s", slot, field); !strings.Contains(text, "key: "+key+"\n") {
-				t.Fatalf("module.yaml declares no option %s", key)
-			}
-		}
-
-		if want := fmt.Sprintf("option: plug%d_host\n    ports: [80]", slot); !strings.Contains(text, want) {
-			t.Fatalf("module.yaml declares no egress for plug%d_host on port 80", slot)
-		}
+	if !strings.Contains(text, "key: "+keyPlugs+"\n") {
+		t.Fatalf("module.yaml declares no option %s", keyPlugs)
 	}
 
-	if strings.Contains(text, fmt.Sprintf("plug%d_host", maxPlugs+1)) {
-		t.Fatalf("module.yaml names a slot past maxPlugs (%d)", maxPlugs)
+	if want := "option: " + keyPlugs + "\n    ports: [80]"; !strings.Contains(text, want) {
+		t.Fatalf("module.yaml declares no egress for the %s setting on port 80", keyPlugs)
+	}
+
+	if regexp.MustCompile(`plug\d+_(name|host|printer)`).MatchString(text) {
+		t.Fatal("module.yaml still names a numbered plug setting")
 	}
 
 	for _, key := range []string{"auto_off_minutes", "auto_off_cooldown_c", "overheat_nozzle_c", "overheat_bed_c"} {

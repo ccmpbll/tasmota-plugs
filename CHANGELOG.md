@@ -1,3 +1,10 @@
+## 0.2.0 - 2026-11-21
+
+### Changed
+
+- There is no limit on how many plugs you can set up. The plugs are now one setting, `plugs`, a JSON list of `{"name", "host", "printer"}`, in place of the `plug1_name` to `plug8_printer` settings. The Set up plugs page writes it, and a name that is left empty is `plug1`, `plug2` and so on by its place in the list. `install.sh` writes it from its `name=host=serial` arguments, and the egress is one entry for the `plugs` setting.
+- **Upgrading from 0.1:** the old per-plug settings are no longer accepted. Set the plugs up again on the Tasmota Plugs page, or give them to `install.sh` again.
+
 ## 0.1.2 - 2026-11-20
 
 Replaces 0.1.1, which the marketplace refused before publishing because `module.yaml` held an invalid YAML escape.

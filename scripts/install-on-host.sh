@@ -14,7 +14,7 @@
 # how to upgrade. With plugs it REPLACES the plug settings with exactly these.
 #
 #   <container>   the Connect container's name, as `docker ps` shows it
-#   <plug>        optional, one per plug, up to eight: its name (lower-case letters, digits,
+#   <plug>        optional, one per plug, as many as you like: its name (lower-case letters, digits,
 #                 hyphens), its host name or IPv4 address (no port), and optionally
 #                 the serial of the printer it powers, as Connect shows it
 #   -n            show what would run and stop; nothing is changed
@@ -68,7 +68,6 @@ fi
 # The plugs become the settings file. They are held to the rules the module
 # enforces at start, so a typo fails here and not after a restart. Every value is
 # limited to characters that need no JSON escaping.
-[ $# -le 8 ] || fail "give at most eight plugs"
 
 NAME_RE='^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$'
 LABEL='[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?'
@@ -99,11 +98,14 @@ for spec in "$@"; do
 	SEEN="$SEEN$name "
 
 	[ -z "$JSON" ] || JSON="$JSON,"
-	JSON="$JSON\"plug${n}_name\":\"$name\",\"plug${n}_host\":\"$host\",\"plug${n}_printer\":\"$serial\""
+	JSON="$JSON{\"name\":\"$name\",\"host\":\"$host\",\"printer\":\"$serial\"}"
 	SUMMARY="$SUMMARY  $name -> $host${serial:+ (printer $serial)}
 "
 done
-JSON="{$JSON}"
+# The plugs setting is one text value that holds the whole list as JSON, so the
+# list is written once more inside the settings file, with its quotes escaped.
+PLUGS="[$JSON]"
+JSON="{\"plugs\":\"$(printf '%s' "$PLUGS" | sed 's/"/\\"/g')\"}"
 HAVE_PLUGS=1
 [ $n -gt 0 ] || HAVE_PLUGS=0
 if [ "$HAVE_PLUGS" = 0 ]; then

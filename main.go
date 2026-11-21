@@ -18,10 +18,10 @@
 //
 // # Settings
 //
-// Up to eight plugs, each three keys: plug<N>_name, plug<N>_host and
-// plug<N>_printer (the serial of the printer it powers). settings.go reads them,
-// module.yaml declares them, and declares each host as the egress this module
-// makes, on port 80. Nothing here reads an environment variable.
+// The plugs are one setting, plugs, a JSON list of {name, host, printer} with no
+// limit on its length. settings.go reads it, module.yaml declares it, and
+// declares the hosts in it as the one egress entry this module makes, on port
+// 80. Nothing here reads an environment variable.
 //
 // # Errors
 //
@@ -62,7 +62,7 @@ import (
 // manifest's, and the host holds the two to each other.
 const (
 	name    = "smart-plugs"
-	release = extension.Version("0.1.2")
+	release = extension.Version("0.2.0")
 )
 
 // held is the settings this module is running on. It is an atomic value because

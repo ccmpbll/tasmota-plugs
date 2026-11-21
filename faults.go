@@ -78,7 +78,7 @@ var (
 	// PlugNotFound is a call to a plug no setting names.
 	PlugNotFound = fault.Register(faultDomain, "PLUG_NOT_FOUND", http.StatusNotFound, fault.Document(
 		"No plug has that name",
-		"List the plugs with GET /plugs, or set plug<N>_host and plug<N>_name in this instance's config block.",
+		"List the plugs with GET /plugs, or add the plug to the plugs setting in this instance's config block.",
 		fault.RetryNever,
 		fault.ShowDetail,
 		"name",

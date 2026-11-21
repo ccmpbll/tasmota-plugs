@@ -34,9 +34,6 @@
   // The namespace Connect derives for this module, which is how its instance is
   // found among the server's resources whatever the operator named it.
   const NAMESPACE = 'com.github.aux.ccmpbll.tasmota-plugs';
-  // The module reads at most this many plugs: each host is a connection it
-  // declares to the operator, one setting per slot.
-  const MAX_PLUGS = 8;
   const KIND = 'sink';
   const NONE = 'none';
   const DEFAULT_CURRENCY = '$';
@@ -128,6 +125,28 @@
     return typeof value === 'string' ? value : '';
   };
 
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null;
+
+  // The plugs setting: JSON text, a list of {name, host, printer}. Empty is no
+  // plugs, and text that is not that list is an error the page shows.
+  const plugsOf = (text: string): Omit<Row, 'id'>[] => {
+    if (text.trim() === '') return [];
+    const list: unknown = JSON.parse(text);
+    if (!Array.isArray(list))
+      throw new Error('the plugs setting is not a list');
+
+    return list.map((entry: unknown) => {
+      const plug = isRecord(entry) ? entry : {};
+
+      return {
+        name: word(plug, 'name'),
+        host: word(plug, 'host'),
+        printer: word(plug, 'printer'),
+      };
+    });
+  };
+
   const blank = (printer = ''): Row => ({
     id: nextId++,
     name: '',
@@ -150,20 +169,12 @@
       );
       const config: Readonly<Record<string, unknown>> = spec.config;
 
-      const read: Row[] = [];
-      for (let slot = 1; slot <= MAX_PLUGS; slot += 1) {
-        const row = {
-          id: nextId++,
-          name: word(config, `plug${String(slot)}_name`),
-          host: word(config, `plug${String(slot)}_host`),
-          printer: word(config, `plug${String(slot)}_printer`),
-        };
-        if (row.name !== '' || row.host !== '' || row.printer !== '')
-          read.push(row);
-      }
+      const read = plugsOf(word(config, 'plugs')).map((plug) => ({
+        id: nextId++,
+        ...plug,
+      }));
 
-      if (addFor !== undefined && read.length < MAX_PLUGS)
-        read.push(blank(addFor));
+      if (addFor !== undefined) read.push(blank(addFor));
 
       resource = spec;
       rows = read;
@@ -276,7 +287,7 @@
   );
 
   const add = (): void => {
-    if (rows.length < MAX_PLUGS) rows.push(blank());
+    rows.push(blank());
   };
 
   const remove = (id: number): void => {
@@ -288,16 +299,16 @@
     saving = true;
     failure = undefined;
 
-    // Every slot is written, so a slot that was removed is cleared.
-    const settings: Record<string, string> = {};
-    for (let slot = 1; slot <= MAX_PLUGS; slot += 1) {
-      const row = rows[slot - 1];
-      settings[`plug${String(slot)}_name`] = row
-        ? effectiveName(row, slot - 1)
-        : '';
-      settings[`plug${String(slot)}_host`] = row?.host.trim() ?? '';
-      settings[`plug${String(slot)}_printer`] = row?.printer.trim() ?? '';
-    }
+    // The whole list is written as one setting, so a plug that was removed is gone.
+    const settings: Record<string, string> = {
+      plugs: JSON.stringify(
+        rows.map((row, index) => ({
+          name: effectiveName(row, index),
+          host: row.host.trim(),
+          printer: row.printer.trim(),
+        })),
+      ),
+    };
     settings.price_per_kwh = price.trim();
     settings.currency = currency.trim() || DEFAULT_CURRENCY;
     for (const f of AUTO) settings[f.key] = (auto[f.key] ?? '').trim();
@@ -435,19 +446,9 @@
         {/each}
 
         <div>
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={rows.length >= MAX_PLUGS}
-            onclick={add}
-          >
+          <Button variant="secondary" size="sm" onclick={add}>
             {t('smart-plugs.setup.add')}
           </Button>
-          {#if rows.length >= MAX_PLUGS}
-            <span class="ms-3 text-xs text-muted-foreground"
-              >{t('smart-plugs.setup.full')}</span
-            >
-          {/if}
         </div>
 
         <div class="grid gap-3 md:grid-cols-3">

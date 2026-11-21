@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "smart-plugs",
-    "version": "0.1.2",
+    "version": "0.2.0",
     "description": "The routes smart-plugs serves. Every path is relative to the mount the host assigns, and the host serves this document rebased under it at <mount>/openapi.json."
   },
   "paths": {
@@ -163,7 +163,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "The plug's name from plug<N>_name, or plug<N> when none was set."
+            "description": "The plug's name from the plugs setting, or plug<N> (N is its place in the list, from 1) when none was set."
           }
         ],
         "responses": {
@@ -294,7 +294,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "The plug's name from plug<N>_name, or plug<N> when none was set."
+            "description": "The plug's name from the plugs setting, or plug<N> (N is its place in the list, from 1) when none was set."
           }
         ],
         "requestBody": {

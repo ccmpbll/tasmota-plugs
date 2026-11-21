@@ -18,27 +18,71 @@ func parse(t *testing.T, body string) (Settings, error) {
 	return s, json.Unmarshal([]byte(body), &s)
 }
 
-func TestSlotsAreReadInOrderAndEmptyOnesAreDropped(t *testing.T) {
-	s, err := parse(t, `{"plug2_host":"b.lan","plug2_name":"mk4s","plug2_printer":"CZPX-2",
-		"plug1_host":"a.lan","plug3_host":"","plug3_name":"","plug3_printer":"","plug8_host":"h.lan"}`)
+// withPlugs is a settings body whose plugs setting holds the given JSON text.
+func withPlugs(list string) string {
+	body, _ := json.Marshal(map[string]string{"plugs": list})
+
+	return string(body)
+}
+
+func TestPlugsAreReadInTheOrderGiven(t *testing.T) {
+	s, err := parse(t, withPlugs(`[
+		{"name":"mk4s","host":"b.lan","printer":"CZPX-2"},
+		{"name":"","host":" a.lan ","printer":""},
+		{"name":" bench ","host":"h.lan"}]`))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(s.Plugs) != 3 || s.Plugs[0].Slot != 1 || s.Plugs[1].Slot != 2 || s.Plugs[2].Slot != 8 {
-		t.Fatalf("slots read as %+v", s.Plugs)
+	if len(s.Plugs) != 3 || s.Plugs[0].Slot != 1 || s.Plugs[1].Slot != 2 || s.Plugs[2].Slot != 3 {
+		t.Fatalf("plugs read as %+v", s.Plugs)
 	}
 
-	// A plug with no name is named after its slot.
-	if s.Plugs[0].Name != "plug1" || s.Plugs[1].Name != "mk4s" {
-		t.Fatalf("names read as %q and %q", s.Plugs[0].Name, s.Plugs[1].Name)
+	// A plug with no name is named after its place, and values lose their spaces.
+	if s.Plugs[0].Name != "mk4s" || s.Plugs[1].Name != "plug2" || s.Plugs[1].Host != "a.lan" || s.Plugs[2].Name != "bench" {
+		t.Fatalf("read as %+v", s.Plugs)
 	}
 }
 
-func TestUnknownKeysAndOutOfRangeSlotsAreRefusedByName(t *testing.T) {
+// The reason for the one setting: no count is built in.
+func TestThereIsNoLimitOnHowManyPlugsAreListed(t *testing.T) {
+	var list []plugEntry
+
+	for i := 1; i <= 300; i++ {
+		list = append(list, plugEntry{Name: fmt.Sprintf("plug-%d", i), Host: fmt.Sprintf("10.0.%d.%d", i/250, i%250+1)})
+	}
+
+	text, _ := json.Marshal(list)
+
+	s, err := parse(t, withPlugs(string(text)))
+	if err != nil || len(s.Plugs) != 300 || s.Plugs[299].Slot != 300 {
+		t.Fatalf("300 plugs read as %d, %v", len(s.Plugs), err)
+	}
+
+	if err = s.validate(); err != nil {
+		t.Fatalf("300 good plugs were refused: %v", err)
+	}
+}
+
+func TestNoPlugsIsAValidSetting(t *testing.T) {
+	for _, list := range []string{"", "  ", "[]", " [ ] "} {
+		s, err := parse(t, withPlugs(list))
+		if err != nil || len(s.Plugs) != 0 {
+			t.Fatalf("%q read as %+v, %v", list, s.Plugs, err)
+		}
+	}
+}
+
+func TestUnknownKeysAndBadPlugListsAreRefused(t *testing.T) {
 	for _, body := range []string{
-		`{"plug_host":"a.lan"}`, `{"plug0_host":"a.lan"}`, `{"plug9_host":"a.lan"}`,
-		`{"plug1_hots":"a.lan"}`, `{"plug1_host":5}`, `[]`, `{"plug99999999999999999999_host":"x"}`,
+		`{"plug_host":"a.lan"}`, `{"plug1_host":"a.lan"}`, `{"plug1_name":"a"}`, `{"plugs_extra":"[]"}`,
+		`{"plugs":5}`, `[]`,
+		withPlugs(`{"name":"a","host":"a.lan"}`),                      // an object, not a list
+		withPlugs(`["a.lan"]`),                                        // a list of text
+		withPlugs(`[{"name":"a","hots":"a.lan"}]`),                    // a typo in a key
+		withPlugs(`[{"name":"a","host":5}]`),                          // a number for text
+		withPlugs(`[{"name":"a","host":"a.lan"}] [{"host":"b.lan"}]`), // text after the list
+		withPlugs(`[{"name":"a","host":"a.lan"},`),                    // cut short
 	} {
 		if _, err := parse(t, body); err == nil {
 			t.Fatalf("%s was accepted", body)
@@ -109,23 +153,23 @@ func TestNamesForOnlyMatchesAnExactNonEmptySerial(t *testing.T) {
 	}
 }
 
-// A slot with a name or a printer but no host is the likeliest mistake, so the
-// error says which key is empty rather than that "" is not a host.
-func TestAMissingHostNamesTheKeyToFill(t *testing.T) {
+// A plug with a name or a printer but no host is the likeliest mistake, so the
+// error says which plug has no host rather than that "" is not a host.
+func TestAMissingHostNamesThePlug(t *testing.T) {
 	err := (Settings{Plugs: []plugConfig{{Slot: 3, Name: "mk4s", Printer: "CZPX-2"}}}).validate()
-	if err == nil || !strings.Contains(err.Error(), "plug3_host is empty") {
-		t.Fatalf("the error is %v, want one naming plug3_host as empty", err)
+	if err == nil || !strings.Contains(err.Error(), "plug 3 (mk4s): the host is empty") {
+		t.Fatalf("the error is %v, want one naming plug 3 (mk4s) as having no host", err)
 	}
 }
 
 func TestPriceAndCurrencyAreReadAndHeldToRules(t *testing.T) {
-	s, err := parse(t, `{"plug1_host":"a.lan","price_per_kwh":"0.14","currency":"€"}`)
+	s, err := parse(t, `{"price_per_kwh":"0.14","currency":"€"}`)
 	if err != nil || s.PricePerKWH == nil || *s.PricePerKWH != 0.14 || s.Currency != "€" {
 		t.Fatalf("read %+v, %v", s, err)
 	}
 
 	// No price and no currency: nothing is priced, and the currency is the default.
-	s, err = parse(t, `{"plug1_host":"a.lan","price_per_kwh":"","currency":""}`)
+	s, err = parse(t, `{"price_per_kwh":"","currency":""}`)
 	if err != nil || s.PricePerKWH != nil || s.Currency != defaultCurrency {
 		t.Fatalf("read %+v, %v", s, err)
 	}

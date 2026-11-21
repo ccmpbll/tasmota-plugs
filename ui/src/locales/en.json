@@ -36,7 +36,6 @@
   "smart-plugs.setup.printer.gone": "{serial} (not connected)",
   "smart-plugs.setup.add": "+ Add a plug",
   "smart-plugs.setup.remove": "Remove",
-  "smart-plugs.setup.full": "Up to eight plugs.",
   "smart-plugs.setup.price": "Electricity price per kWh",
   "smart-plugs.setup.price.placeholder": "0.14",
   "smart-plugs.setup.price.hint": "Optional. Shows what the energy each plug used costs.",
