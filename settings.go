@@ -2,20 +2,22 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"math"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"unicode"
 )
 
-// maxPlugs is how many plugs the module can drive. The count is fixed because
-// the manifest declares every host a module connects to as egress, and an
-// egress entry names one string option: one host each. plug1_host .. plug8_host
-// are those options.
-const maxPlugs = 8
+// keyPlugs is the one setting that lists the plugs, as JSON text:
+// [{"name":"Core One","host":"192.168.1.30","printer":"CZPX1234"}, ...]. The
+// list has no length limit because it is one setting. An egress entry names one
+// string option, so the manifest's one entry for this option covers every host
+// written in it.
+const keyPlugs = "plugs"
 
 // defaultCurrency is what a price is written in when none is set.
 const defaultCurrency = "$"
@@ -147,7 +149,7 @@ func (a Auto) validate() error {
 // plugConfig is one configured plug: a Tasmota relay, and optionally the
 // printer it powers.
 type plugConfig struct {
-	// Slot is the number in the setting keys, 1 to maxPlugs.
+	// Slot is the plug's place in the list, from 1.
 	Slot int
 	// Name is how the routes address the plug. It defaults to plug<slot>.
 	Name string
@@ -158,12 +160,11 @@ type plugConfig struct {
 	Printer string
 }
 
-// Settings is what an operator writes under this instance's config block: up
-// to maxPlugs slots, each three keys, plug<N>_name, plug<N>_host and
-// plug<N>_printer. The host merges it over the defaults module.yaml declares
-// and sends the result on plugin.configure.
+// Settings is what an operator writes under this instance's config block: the
+// plugs setting and the few others module.yaml declares. The host merges it over
+// the defaults module.yaml declares and sends the result on plugin.configure.
 type Settings struct {
-	// Plugs are the slots with anything set, in slot order.
+	// Plugs are the plugs in the order the list gives them.
 	Plugs []plugConfig
 	// PricePerKWH is what a kilowatt-hour costs, so the energy a plug has used
 	// can be shown as money. Nil means no price: nothing is priced.
@@ -174,25 +175,76 @@ type Settings struct {
 	Auto Auto
 }
 
-var (
-	slotKey = regexp.MustCompile(`^plug([0-9]+)_(name|host|printer)$`)
-)
+// plugEntry is one element of the plugs setting.
+type plugEntry struct {
+	Name    string `json:"name"`
+	Host    string `json:"host"`
+	Printer string `json:"printer"`
+}
 
-// UnmarshalJSON reads the flat plug<N>_<field> keys into slots. A key that is
-// not one of those, or a slot past maxPlugs, is refused by name, so a typo is
-// found at start and not at the first request.
+// parsePlugs reads the plugs setting: empty is no plugs, and anything else is a
+// JSON list of {name, host, printer}. A key it does not know is refused, so a
+// typo such as "hots" is found at start and not at the first request.
+func parsePlugs(text string) ([]plugConfig, error) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil, nil
+	}
+
+	var entries []plugEntry
+
+	decoder := json.NewDecoder(strings.NewReader(text))
+	decoder.DisallowUnknownFields()
+
+	if err := decoder.Decode(&entries); err != nil {
+		return nil, fmt.Errorf(`%s is not a list of {"name", "host", "printer"}: %w`, keyPlugs, err)
+	}
+
+	// More() would say false for a stray ] or }, so the rest is read as a value:
+	// anything but the end of the text is text after the list.
+	if err := decoder.Decode(new(json.RawMessage)); !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("%s has text after the list", keyPlugs)
+	}
+
+	plugs := make([]plugConfig, 0, len(entries))
+
+	for i, entry := range entries {
+		held := plugConfig{
+			Slot:    i + 1,
+			Name:    strings.TrimSpace(entry.Name),
+			Host:    strings.TrimSpace(entry.Host),
+			Printer: strings.TrimSpace(entry.Printer),
+		}
+
+		if held.Name == "" {
+			held.Name = "plug" + strconv.Itoa(held.Slot)
+		}
+
+		plugs = append(plugs, held)
+	}
+
+	return plugs, nil
+}
+
+// UnmarshalJSON reads the settings. A key that is not one of this module's is
+// refused by name, so a typo is found at start and not at the first request.
 func (s *Settings) UnmarshalJSON(data []byte) error {
 	var raw map[string]string
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return fmt.Errorf("the settings are not a flat map of text values: %w", err)
 	}
 
-	slots := map[int]*plugConfig{}
-
-	s.PricePerKWH, s.Currency = nil, defaultCurrency
+	s.PricePerKWH, s.Currency, s.Plugs = nil, defaultCurrency, nil
 
 	for key, value := range raw {
 		switch key {
+		case keyPlugs:
+			plugs, err := parsePlugs(value)
+			if err != nil {
+				return err
+			}
+
+			s.Plugs = plugs
 		case "price_per_kwh":
 			price, err := parsePrice(value)
 			if err != nil {
@@ -200,66 +252,23 @@ func (s *Settings) UnmarshalJSON(data []byte) error {
 			}
 
 			s.PricePerKWH = price
-
-			continue
 		case "currency":
 			if value = strings.TrimSpace(value); value != "" {
 				s.Currency = value
 			}
+		default:
+			limit, ok := autoLimitFor(key)
+			if !ok {
+				return fmt.Errorf("%q is not a setting of this module", key)
+			}
 
-			continue
-		}
-
-		if limit, ok := autoLimitFor(key); ok {
 			n, err := parseWhole(key, value)
 			if err != nil {
 				return err
 			}
 
 			*limit.field(&s.Auto) = n
-
-			continue
 		}
-
-		match := slotKey.FindStringSubmatch(key)
-		if match == nil {
-			return fmt.Errorf("%q is not a setting of this module", key)
-		}
-
-		slot, err := strconv.Atoi(match[1])
-		if err != nil || slot < 1 || slot > maxPlugs {
-			return fmt.Errorf("%q names a plug slot outside 1 to %d", key, maxPlugs)
-		}
-
-		if slots[slot] == nil {
-			slots[slot] = &plugConfig{Slot: slot}
-		}
-
-		value = strings.TrimSpace(value)
-
-		switch match[2] {
-		case "name":
-			slots[slot].Name = value
-		case "host":
-			slots[slot].Host = value
-		case "printer":
-			slots[slot].Printer = value
-		}
-	}
-
-	s.Plugs = nil
-
-	for slot := 1; slot <= maxPlugs; slot++ {
-		held := slots[slot]
-		if held == nil || (held.Name == "" && held.Host == "" && held.Printer == "") {
-			continue
-		}
-
-		if held.Name == "" {
-			held.Name = "plug" + strconv.Itoa(slot)
-		}
-
-		s.Plugs = append(s.Plugs, *held)
 	}
 
 	return nil
@@ -285,22 +294,22 @@ func (s Settings) validate() error {
 	for _, p := range s.Plugs {
 		switch {
 		case p.Host == "":
-			return fmt.Errorf("plug%d: plug%d_host is empty, and a plug needs one", p.Slot, p.Slot)
+			return fmt.Errorf("plug %d (%s): the host is empty, and a plug needs one", p.Slot, p.Name)
 		case !validName(p.Name):
-			return fmt.Errorf("plug%d_name %q is not a name: one to 40 characters, with no slash, question mark, hash or percent sign, and no space at either end", p.Slot, p.Name)
+			return fmt.Errorf("plug %d: the name %q is not a name: one to 40 characters, with no slash, question mark, hash or percent sign, and no space at either end", p.Slot, p.Name)
 		case len(p.Printer) > 64 || strings.ContainsAny(p.Printer, " \t\r\n/"):
-			return fmt.Errorf("plug%d_printer %q is not a printer serial", p.Slot, p.Printer)
+			return fmt.Errorf("plug %d (%s): the printer %q is not a printer serial", p.Slot, p.Name, p.Printer)
 		}
 
 		if _, err := newPlug(p.Host); err != nil {
-			return fmt.Errorf("plug%d_host: %w", p.Slot, err)
+			return fmt.Errorf("plug %d (%s): the host: %w", p.Slot, p.Name, err)
 		}
 
 		// Capitals do not make two names different: "Core One" and "core one"
 		// would read as the same plug.
 		key := strings.ToLower(p.Name)
 		if other, dup := names[key]; dup {
-			return fmt.Errorf("plug%d_name and plug%d_name are both %q", other, p.Slot, p.Name)
+			return fmt.Errorf("plugs %d and %d are both named %q", other, p.Slot, p.Name)
 		}
 
 		names[key] = p.Slot

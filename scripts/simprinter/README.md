@@ -11,6 +11,6 @@ set up with `{"mode":"open"}` is), holds the websocket and reports telemetry.
 
 `-server` is the address of the test server and is required.
 `-state PRINTING` lets you see the confirmation before a plug is turned off. The
-`-sn` serial must match a `plug<N>_printer` setting for the printer to show a
-plug. Needs the Go toolchain; its own module, so the module's `go vet ./...`
+`-sn` serial must match the printer of a plug in the `plugs` setting for the
+printer to show that plug. Needs the Go toolchain; its own module, so the module's `go vet ./...`
 does not build it.

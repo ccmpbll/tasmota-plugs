@@ -18,7 +18,7 @@ Both automatic rules are off until you set them. A plug switched off this way sa
 
 ## Setup
 
-Open the Tasmota Plugs page and choose **Set up plugs**. Give each plug a name and an address, and pick the printer it powers (up to eight plugs, and several can share a printer). Saving restarts the extension for a few seconds.
+Open the Tasmota Plugs page and choose **Set up plugs**. Give each plug a name and an address, and pick the printer it powers (as many plugs as you like, and several can share a printer). Saving restarts the extension for a few seconds.
 
 | setting | meaning |
 | --- | --- |
@@ -31,7 +31,7 @@ The overheat limits are a second layer: the printer's own firmware stops a runaw
 
 ## Permissions
 
-It asks for `observe`, to read printer states and serials, and connects only to the plug addresses you enter, on port 80.
+It asks for `observe`, to read printer states and serials, and connects only to the plug addresses you enter, on port 80. The plugs are kept in one setting, `plugs`, whose value is text that holds a JSON list, such as `'[{"name": "Core One", "host": "192.168.1.30", "printer": "CZPX1234"}]'`. The quotes matter: it is a string, not a list of the configuration file's own. The Set up plugs page writes it; you only edit it by hand in the server's configuration file.
 
 ## License
 

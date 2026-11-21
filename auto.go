@@ -161,6 +161,8 @@ type watcher struct {
 	failing bool
 	// blind is the printers whose missing readings were said already.
 	blind map[string]bool
+	// unlinked is whether it was said that a limit is set and no plug is linked.
+	unlinked bool
 
 	mu     sync.Mutex
 	events map[string]autoEvent
@@ -278,6 +280,8 @@ func (w *watcher) tick(ctx context.Context) {
 		clear(w.trips)
 		clear(w.blind)
 
+		w.unlinked = false
+
 		return
 	}
 
@@ -289,9 +293,19 @@ func (w *watcher) tick(ctx context.Context) {
 		}
 	}
 
+	// Said once: a limit that has nothing to act on, as after an upgrade that
+	// dropped the plugs, must not look like one that is protecting a printer.
 	if len(linked) == 0 {
+		if !w.unlinked {
+			w.log("an automatic power-off limit is set, but no plug is linked to a printer, so nothing is switched off automatically")
+		}
+
+		w.unlinked = true
+
 		return
 	}
+
+	w.unlinked = false
 
 	snaps, err := w.snapshots(ctx)
 	if err != nil {

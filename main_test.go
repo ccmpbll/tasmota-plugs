@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -304,10 +306,11 @@ func TestOnlyTheDeclaredMethodsAreServed(t *testing.T) {
 	}
 }
 
-// TestTheManifestDeclaresEverySlotAndItsEgress holds module.yaml to the code:
-// every key the settings accept is a declared option, and every plug host is a
-// declared connection on port 80, so the operator's list is the whole list.
-func TestTheManifestDeclaresEverySlotAndItsEgress(t *testing.T) {
+// TestTheManifestDeclaresTheSettingsAndTheEgress holds module.yaml to the code:
+// every key the settings accept is a declared option, and the plugs setting,
+// which holds every plug host, is declared as the connection on port 80, so the
+// operator's list is the whole list. No per-plug key is left behind.
+func TestTheManifestDeclaresTheSettingsAndTheEgress(t *testing.T) {
 	manifest, err := os.ReadFile("module.yaml")
 	if err != nil {
 		t.Fatalf("read module.yaml: %v", err)
@@ -315,20 +318,16 @@ func TestTheManifestDeclaresEverySlotAndItsEgress(t *testing.T) {
 
 	text := string(manifest)
 
-	for slot := 1; slot <= maxPlugs; slot++ {
-		for _, field := range []string{"name", "host", "printer"} {
-			if key := fmt.Sprintf("plug%d_%s", slot, field); !strings.Contains(text, "key: "+key+"\n") {
-				t.Fatalf("module.yaml declares no option %s", key)
-			}
-		}
-
-		if want := fmt.Sprintf("option: plug%d_host\n    ports: [80]", slot); !strings.Contains(text, want) {
-			t.Fatalf("module.yaml declares no egress for plug%d_host on port 80", slot)
-		}
+	if !strings.Contains(text, "key: "+keyPlugs+"\n") {
+		t.Fatalf("module.yaml declares no option %s", keyPlugs)
 	}
 
-	if strings.Contains(text, fmt.Sprintf("plug%d_host", maxPlugs+1)) {
-		t.Fatalf("module.yaml names a slot past maxPlugs (%d)", maxPlugs)
+	if want := "option: " + keyPlugs + "\n    ports: [80]"; !strings.Contains(text, want) {
+		t.Fatalf("module.yaml declares no egress for the %s setting on port 80", keyPlugs)
+	}
+
+	if regexp.MustCompile(`plug\d+_(name|host|printer)`).MatchString(text) {
+		t.Fatal("module.yaml still names a numbered plug setting")
 	}
 
 	for _, key := range []string{"auto_off_minutes", "auto_off_cooldown_c", "overheat_nozzle_c", "overheat_bed_c"} {
@@ -682,5 +681,96 @@ func TestOnlyAFreshYesIsKept(t *testing.T) {
 
 	if asked != 4 {
 		t.Fatalf("an expired \"yes\" was still used: %d questions", asked)
+	}
+}
+
+// slowPlugs is plugs whose host is one fake server, which counts how many reads
+// are in flight at once and holds each for a moment.
+func slowPlugs(t *testing.T, n int, hold time.Duration) (plugs []plugConfig, peak, hits *atomic.Int32) {
+	t.Helper()
+
+	var inFlight atomic.Int32
+
+	peak, hits = new(atomic.Int32), new(atomic.Int32)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+
+		now := inFlight.Add(1)
+		defer inFlight.Add(-1)
+
+		for old := peak.Load(); now > old && !peak.CompareAndSwap(old, now); old = peak.Load() {
+		}
+
+		select {
+		case <-time.After(hold):
+		case <-r.Context().Done():
+			return
+		}
+
+		_, _ = w.Write([]byte(statusJSON("POWER1", "ON", energyBlock)))
+	}))
+	t.Cleanup(srv.Close)
+
+	old := plugAt
+	plugAt = func(string) (*plug, error) { return &plug{base: srv.URL, client: srv.Client()}, nil }
+
+	t.Cleanup(func() { plugAt = old })
+
+	for i := 1; i <= n; i++ {
+		plugs = append(plugs, plugConfig{Slot: i, Name: fmt.Sprintf("p%d", i), Host: fmt.Sprintf("p%d.lan", i)})
+	}
+
+	return plugs, peak, hits
+}
+
+// The list has no length limit, so the read is what is bounded: a long list is
+// read in turns, and every plug is still read.
+func TestAReadTalksToAtMostMaxParallelPlugsAtOnce(t *testing.T) {
+	plugs, peak, _ := slowPlugs(t, 3*maxParallel+5, 20*time.Millisecond)
+
+	views := readAll(context.Background(), plugs)
+
+	for _, v := range views {
+		if v.On == nil || v.Error != "" {
+			t.Fatalf("%s was not read: %+v", v.Name, v)
+		}
+	}
+
+	if got := int(peak.Load()); got > maxParallel || got < 2 {
+		t.Fatalf("%d plugs were asked at once, want between 2 and %d", got, maxParallel)
+	}
+}
+
+// When the read's time is spent, the plugs that never had their turn are rows
+// with an error, and only the plugs that had a turn reached the network.
+func TestPlugsThatAreNotReachedInTimeShowAnError(t *testing.T) {
+	plugs, _, hits := slowPlugs(t, 3*maxParallel, time.Minute)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+
+	views := readAll(ctx, plugs)
+
+	late := 0
+
+	for _, v := range views {
+		if v.On != nil || v.Error == "" {
+			t.Fatalf("%s should be an error row: %+v", v.Name, v)
+		}
+
+		if strings.HasPrefix(v.Error, "not read in time") {
+			late++
+		}
+	}
+
+	// The plugs that never had a turn are told so, and not left with a bare
+	// "context deadline exceeded" from a read that was never going to happen.
+	if late != len(plugs)-maxParallel {
+		t.Fatalf("%d plugs were told they were not read in time, want %d", late, len(plugs)-maxParallel)
+	}
+
+	if got := int(hits.Load()); got > maxParallel {
+		t.Fatalf("%d plugs were asked, want at most %d", got, maxParallel)
 	}
 }

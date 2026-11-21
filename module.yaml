@@ -1,5 +1,5 @@
 # The manifest for smart-plugs: the Go process in main.go and the browser half
-# in ui/. It drives up to eight Tasmota plugs over HTTP, one or more per
+# in ui/. It drives Tasmota plugs over HTTP, as many as you list, one or more per
 # printer, adds a Tasmota Plugs page, a printer tab and a dashboard card to the
 # app, and logs the print events of the printers the host lets it observe.
 #
@@ -14,7 +14,7 @@ name: smart-plugs
 # The kind the one instance is declared under. It offers the service runtime,
 # which is what a module with a process needs.
 kind: sink
-version: 0.1.2
+version: 0.2.0
 # The licence this module is released under. The marketplace shows it and
 # refuses a release without one. An SPDX identifier is the usual form.
 license: MIT
@@ -52,106 +52,12 @@ platforms:
 #     sink:
 #       smart-plugs:
 #         config:
-#           plug1_name: Core One
-#           plug1_host: 192.168.1.30
-#           plug1_printer: CZPX1234X009XC12345
+#           plugs: '[{"name": "Core One", "host": "192.168.1.30", "printer": "CZPX1234X009XC12345"}]'
 options:
-  - key: plug1_name
+  - key: plugs
     type: string
     default: ""
-    summary: "Plug 1: the name shown for it, such as Core One. Up to 40 characters, without / ? # or %. Empty names it plug1."
-  - key: plug1_host
-    type: string
-    default: ""
-    summary: "Plug 1: the Tasmota plug's host name or IPv4 address, with no port. Empty leaves the slot unused."
-  - key: plug1_printer
-    type: string
-    default: ""
-    summary: "Plug 1: the serial of the printer it powers, as the printer's page shows it. Empty links no printer."
-  - key: plug2_name
-    type: string
-    default: ""
-    summary: "Plug 2: the name shown for it, such as Core One. Up to 40 characters, without / ? # or %. Empty names it plug2."
-  - key: plug2_host
-    type: string
-    default: ""
-    summary: "Plug 2: the Tasmota plug's host name or IPv4 address, with no port. Empty leaves the slot unused."
-  - key: plug2_printer
-    type: string
-    default: ""
-    summary: "Plug 2: the serial of the printer it powers, as the printer's page shows it. Empty links no printer."
-  - key: plug3_name
-    type: string
-    default: ""
-    summary: "Plug 3: the name shown for it, such as Core One. Up to 40 characters, without / ? # or %. Empty names it plug3."
-  - key: plug3_host
-    type: string
-    default: ""
-    summary: "Plug 3: the Tasmota plug's host name or IPv4 address, with no port. Empty leaves the slot unused."
-  - key: plug3_printer
-    type: string
-    default: ""
-    summary: "Plug 3: the serial of the printer it powers, as the printer's page shows it. Empty links no printer."
-  - key: plug4_name
-    type: string
-    default: ""
-    summary: "Plug 4: the name shown for it, such as Core One. Up to 40 characters, without / ? # or %. Empty names it plug4."
-  - key: plug4_host
-    type: string
-    default: ""
-    summary: "Plug 4: the Tasmota plug's host name or IPv4 address, with no port. Empty leaves the slot unused."
-  - key: plug4_printer
-    type: string
-    default: ""
-    summary: "Plug 4: the serial of the printer it powers, as the printer's page shows it. Empty links no printer."
-  - key: plug5_name
-    type: string
-    default: ""
-    summary: "Plug 5: the name shown for it, such as Core One. Up to 40 characters, without / ? # or %. Empty names it plug5."
-  - key: plug5_host
-    type: string
-    default: ""
-    summary: "Plug 5: the Tasmota plug's host name or IPv4 address, with no port. Empty leaves the slot unused."
-  - key: plug5_printer
-    type: string
-    default: ""
-    summary: "Plug 5: the serial of the printer it powers, as the printer's page shows it. Empty links no printer."
-  - key: plug6_name
-    type: string
-    default: ""
-    summary: "Plug 6: the name shown for it, such as Core One. Up to 40 characters, without / ? # or %. Empty names it plug6."
-  - key: plug6_host
-    type: string
-    default: ""
-    summary: "Plug 6: the Tasmota plug's host name or IPv4 address, with no port. Empty leaves the slot unused."
-  - key: plug6_printer
-    type: string
-    default: ""
-    summary: "Plug 6: the serial of the printer it powers, as the printer's page shows it. Empty links no printer."
-  - key: plug7_name
-    type: string
-    default: ""
-    summary: "Plug 7: the name shown for it, such as Core One. Up to 40 characters, without / ? # or %. Empty names it plug7."
-  - key: plug7_host
-    type: string
-    default: ""
-    summary: "Plug 7: the Tasmota plug's host name or IPv4 address, with no port. Empty leaves the slot unused."
-  - key: plug7_printer
-    type: string
-    default: ""
-    summary: "Plug 7: the serial of the printer it powers, as the printer's page shows it. Empty links no printer."
-  - key: plug8_name
-    type: string
-    default: ""
-    summary: "Plug 8: the name shown for it, such as Core One. Up to 40 characters, without / ? # or %. Empty names it plug8."
-  - key: plug8_host
-    type: string
-    default: ""
-    summary: "Plug 8: the Tasmota plug's host name or IPv4 address, with no port. Empty leaves the slot unused."
-  - key: plug8_printer
-    type: string
-    default: ""
-    summary: "Plug 8: the serial of the printer it powers, as the printer's page shows it. Empty links no printer."
+    summary: 'The plugs, as JSON text: [{"name": "Core One", "host": "192.168.1.30", "printer": "CZPX1234"}, ...]. There is no limit on how many. A name is up to 40 characters, without / ? # or %, and empty names it plug1, plug2 and so on. A host is the plug''s host name or IPv4 address, with no port. A printer is the serial of the printer it powers, or empty for none. The Set up plugs page writes it.'
   - key: price_per_kwh
     type: string
     default: ""
@@ -177,41 +83,13 @@ options:
     default: ""
     summary: "Switch off a printer's plugs, in any state, when the bed reads above this, 100 to 200 degrees Celsius. Empty is off. A second layer: set it above any filament you print."
 
-# Every connection this module makes outside Prusa Connect, one per plug host.
-# The operator reads them before approving the install. A plug needs its own
-# entry because an egress entry names one option, and so one host.
+# Every connection this module makes outside Prusa Connect. The plugs are listed
+# in the one `plugs` setting, so this one entry covers the host of every plug in
+# it, however many there are. The operator reads it before approving the install.
 egress:
-  - option: plug1_host
+  - option: plugs
     ports: [80]
-    why: "Plug 1: reads the plug's state and energy meter and switches the relay, over Tasmota's HTTP command interface."
-    sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
-  - option: plug2_host
-    ports: [80]
-    why: "Plug 2: reads the plug's state and energy meter and switches the relay, over Tasmota's HTTP command interface."
-    sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
-  - option: plug3_host
-    ports: [80]
-    why: "Plug 3: reads the plug's state and energy meter and switches the relay, over Tasmota's HTTP command interface."
-    sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
-  - option: plug4_host
-    ports: [80]
-    why: "Plug 4: reads the plug's state and energy meter and switches the relay, over Tasmota's HTTP command interface."
-    sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
-  - option: plug5_host
-    ports: [80]
-    why: "Plug 5: reads the plug's state and energy meter and switches the relay, over Tasmota's HTTP command interface."
-    sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
-  - option: plug6_host
-    ports: [80]
-    why: "Plug 6: reads the plug's state and energy meter and switches the relay, over Tasmota's HTTP command interface."
-    sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
-  - option: plug7_host
-    ports: [80]
-    why: "Plug 7: reads the plug's state and energy meter and switches the relay, over Tasmota's HTTP command interface."
-    sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
-  - option: plug8_host
-    ports: [80]
-    why: "Plug 8: reads the plug's state and energy meter and switches the relay, over Tasmota's HTTP command interface."
+    why: "The host of every plug in the plugs setting, a JSON list of name, host and printer: reads its state and energy meter and switches its relay, over Tasmota's HTTP command interface."
     sends: Status 0 (a read-only report of the relay, the energy meter, the Wi-Fi signal and the uptime), Power On and Power Off. Nothing else.
 
 # The memory in MiB the server may budget for the process, children included.

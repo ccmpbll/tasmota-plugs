@@ -151,7 +151,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The plug's name from plug<N>_name, or plug<N> when none was set. */
+                /** @description The plug's name from the plugs setting, or plug<N> (N is its place in the list, from 1) when none was set. */
                 name: string;
             };
             cookie?: never;
@@ -230,7 +230,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The plug's name from plug<N>_name, or plug<N> when none was set. */
+                /** @description The plug's name from the plugs setting, or plug<N> (N is its place in the list, from 1) when none was set. */
                 name: string;
             };
             cookie?: never;
